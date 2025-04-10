@@ -1,0 +1,11 @@
+[package]
+name = "cli"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+main = { path = "../ferri-main/" }
+server = { path = "../ferri-server" }
+rocket = { workspace = true }
+sqlx = { workspace = true }
+clap = { version = "4", features = ["derive"] }
