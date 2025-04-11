@@ -9,9 +9,5 @@ rocket = { workspace = true }
 rocket_db_pools = { version = "0.2.0", features = ["sqlx_sqlite"] }
 reqwest = { workspace = true }
 sqlx = { workspace = true }
-base64 = "0.22.1"
-rsa = { version = "0.9.8", features = ["sha2"] }
-rand = "0.8"
-url = "2.5.4"
-chrono = "0.4.40"
 uuid = { workspace = true }
+chrono = { workspace = true }

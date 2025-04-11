@@ -1,27 +1,188 @@
-pub type ObjectId = String;
+use chrono::{DateTime, Local};
+use serde::{Deserialize, Serialize};
+use sqlx::Sqlite;
 
-pub enum ObjectType {
-	Person,
-}
+pub mod http;
 
-pub struct Object {
-	id: ObjectId,
-	ty: ObjectType
-}
-
+#[derive(Debug, Clone)]
 pub struct Actor {
-	obj: Object,
-	
-	inbox: Inbox,
-	outbox: Outbox,
+    id: String,
+    inbox: String,
+    outbox: String,
 }
 
-pub struct Inbox {}
+#[derive(Debug, Clone)]
+pub struct User {
+    id: String,
+    username: String,
+    actor: Actor,
+    display_name: String,
+}
 
-pub struct Outbox {}
+impl User {
+    pub fn id(&self) -> &str {
+        &self.id
+    }
 
-pub struct Message {}
+    pub fn username(&self) -> &str {
+        &self.username
+    }
 
+    pub fn actor_id(&self) -> &str {
+        &self.actor.id
+    }
+
+    pub fn display_name(&self) -> &str {
+        &self.display_name
+    }
+
+    pub fn actor(&self) -> &Actor {
+        &self.actor
+    }
+
+    pub async fn from_username(
+        username: &str,
+        conn: impl sqlx::Executor<'_, Database = Sqlite>,
+    ) -> User {
+        let user = sqlx::query!(
+            r#"
+                SELECT u.*, a.id as "actor_own_id", a.inbox, a.outbox
+                FROM user u
+                INNER JOIN actor a ON u.actor_id = a.id
+                WHERE username = ?1
+            "#,
+            username
+        )
+        .fetch_one(conn)
+        .await
+        .unwrap();
+        User {
+            id: user.id,
+            username: user.username,
+            actor: Actor {
+                id: user.actor_own_id,
+                inbox: user.inbox,
+                outbox: user.outbox,
+            },
+            display_name: user.display_name,
+        }
+    }
+
+    pub async fn from_actor_id(
+        actor_id: &str,
+        conn: impl sqlx::Executor<'_, Database = Sqlite>,
+    ) -> User {
+        let user = sqlx::query!(
+            r#"
+                SELECT u.*, a.id as "actor_own_id", a.inbox, a.outbox
+                FROM user u
+                INNER JOIN actor a ON u.actor_id = a.id
+                WHERE actor_id = ?1
+            "#,
+            actor_id
+        )
+        .fetch_one(conn)
+        .await
+        .unwrap();
+        User {
+            id: user.id,
+            username: user.username,
+            actor: Actor {
+                id: user.actor_own_id,
+                inbox: user.inbox,
+                outbox: user.outbox,
+            },
+            display_name: user.display_name,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum ActivityType {
+    Follow,
+}
+
+impl ActivityType {
+    fn to_raw(self) -> String {
+        match self {
+            ActivityType::Follow => "Follow".to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct Activity {
-	
+    pub id: String,
+    pub ty: ActivityType,
+    pub object: String,
+    pub published: DateTime<Local>,
+}
+
+pub type KeyId = String;
+
+#[derive(Debug, Clone)]
+pub struct OutgoingActivity {
+    pub signed_by: KeyId,
+    pub req: Activity,
+    pub to: Actor,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct RawActivity {
+    #[serde(rename = "@context")]
+    #[serde(skip_deserializing)]
+    context: String,
+
+    id: String,
+    #[serde(rename = "type")]
+    ty: String,
+
+    actor: String,
+    object: String,
+    published: String,
+}
+
+type OutboxTransport = http::HttpClient;
+pub struct Outbox<'a> {
+    user: User,
+    transport: &'a OutboxTransport,
+}
+
+impl<'a> Outbox<'a> {
+    pub fn user(&self) -> &User {
+        &self.user
+    }
+
+    pub async fn post(&self, activity: OutgoingActivity) {
+        dbg!(&activity);
+        let raw = RawActivity {
+            context: "https://www.w3.org/ns/activitystreams".to_string(),
+            id: activity.req.id,
+            ty: activity.req.ty.to_raw(),
+            actor: self.user.actor.id.clone(),
+            object: activity.req.object,
+            published: activity.req.published.to_rfc3339(),
+        };
+
+        dbg!(&raw);
+
+        let follow_res = self
+            .transport
+            .post(activity.to.inbox)
+            .activity()
+            .json(&raw)
+            .sign(&activity.signed_by)
+            .send()
+            .await
+            .unwrap()
+            .text()
+            .await
+            .unwrap();
+
+        dbg!(follow_res);
+    }
+
+    pub fn for_user(user: User, transport: &'a OutboxTransport) -> Outbox<'a> {
+        Outbox { user, transport }
+    }
 }

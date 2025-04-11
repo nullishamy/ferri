@@ -30,7 +30,7 @@
           packages = with pkgs; [
             sqlx-cli
             (rust-bin.stable.latest.default.override {
-              extensions = [ "rust-src" ];
+              extensions = [ "rust-src" "rust-analyzer" ];
               targets = [  ];
             })
           ]; 

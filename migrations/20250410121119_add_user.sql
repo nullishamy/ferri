@@ -1,7 +1,8 @@
 CREATE TABLE IF NOT EXISTS user
 (
-	-- Username
-    id TEXT PRIMARY KEY NOT NULL,
+	-- UUID
+	id TEXT PRIMARY KEY NOT NULL,
+	username TEXT NOT NULL,
 	actor_id TEXT NOT NULL,
 	display_name TEXT NOT NULL,
 
