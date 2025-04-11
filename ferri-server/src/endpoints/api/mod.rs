@@ -3,3 +3,4 @@ pub mod apps;
 pub mod instance;
 pub mod status;
 pub mod preferences;
+pub mod timeline;

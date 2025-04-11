@@ -1,14 +1,12 @@
 use main::ap;
-use rocket::{State, get, http::ContentType, post, serde::json::Json};
+use rocket::{get, http::ContentType, serde::json::Json};
 use rocket_db_pools::Connection;
 
 use crate::{
     Db,
-    http::HttpClient,
-    types::{OrderedCollection, Person, UserKey, activity, content},
+    types::{OrderedCollection, Person, UserKey, content},
 };
 
-use rocket::serde::json::serde_json;
 
 use super::activity_type;
 
@@ -20,91 +18,6 @@ pub async fn inbox(user: String) -> Json<OrderedCollection> {
         total_items: 0,
         ordered_items: vec![],
     })
-}
-
-#[post("/users/<user>/inbox", data = "<body>")]
-pub async fn post_inbox(
-    mut db: Connection<Db>,
-    http: &State<HttpClient>,
-    user: String,
-    body: String,
-) {
-    let min = serde_json::from_str::<activity::MinimalActivity>(&body).unwrap();
-    match min.ty.as_str() {
-        "Delete" => {
-            let activity = serde_json::from_str::<activity::DeleteActivity>(&body);
-            dbg!(activity.unwrap());
-        }
-        "Follow" => {
-            let activity = serde_json::from_str::<activity::FollowActivity>(&body).unwrap();
-            dbg!(&activity);
-
-            let user = http
-                .get(&activity.actor)
-                .activity()
-                .send()
-                .await
-                .unwrap()
-                .json::<Person>()
-                .await
-                .unwrap();
-
-            sqlx::query!(
-                r#"
-              INSERT INTO actor (id, inbox, outbox)
-              VALUES ( ?1, ?2, ?3 )
-              ON CONFLICT(id) DO NOTHING;
-            "#,
-                activity.actor,
-                user.inbox,
-                user.outbox
-            )
-            .execute(&mut **db)
-            .await
-            .unwrap();
-
-            sqlx::query!(
-                r#"
-              INSERT INTO follow (id, follower_id, followed_id)
-              VALUES ( ?1, ?2, ?3 )
-              ON CONFLICT(id) DO NOTHING;
-            "#,
-                activity.id,
-                activity.actor,
-                activity.object
-            )
-            .execute(&mut **db)
-            .await
-            .unwrap();
-
-            let accept = activity::AcceptActivity {
-                ty: "Accept".to_string(),
-                actor: "https://ferri.amy.mov/users/amy".to_string(),
-                object: activity.id,
-            };
-
-            let key_id = "https://ferri.amy.mov/users/amy#main-key";
-            let accept_res = http
-                .post(user.inbox)
-                .json(&accept)
-                .sign(key_id)
-                .activity()
-                .send()
-                .await
-                .unwrap()
-                .text()
-                .await
-                .unwrap();
-
-            dbg!(accept_res);
-        }
-        unknown => {
-            eprintln!("WARN: Unknown activity '{}' - {}", unknown, body);
-        }
-    }
-
-    dbg!(min);
-    println!("Body in inbox: {}", body);
 }
 
 #[get("/users/<user>/outbox")]

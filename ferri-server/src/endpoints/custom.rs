@@ -87,7 +87,6 @@ pub async fn test(http: &State<HttpClient>) -> &'static str {
     let post = activity::CreateActivity {
         id: "https://ferri.amy.mov/activities/amy/20".to_string(),
         ty: "Create".to_string(),
-        summary: "Amy create a note".to_string(),
         actor: "https://ferri.amy.mov/users/amy".to_string(),
         object: content::Post {
             context: "https://www.w3.org/ns/activitystreams".to_string(),

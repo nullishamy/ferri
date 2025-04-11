@@ -2,6 +2,7 @@ use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
 use sqlx::Sqlite;
 
+use std::fmt::Debug;
 pub mod http;
 
 #[derive(Debug, Clone)]
@@ -9,6 +10,12 @@ pub struct Actor {
     id: String,
     inbox: String,
     outbox: String,
+}
+
+impl Actor {
+    pub fn from_raw(id: String, inbox: String, outbox: String) -> Self {
+        Self { id, inbox, outbox }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -100,35 +107,74 @@ impl User {
 #[derive(Debug, Clone)]
 pub enum ActivityType {
     Follow,
+    Accept,
+    Create,
+    Unknown
 }
 
 impl ActivityType {
     fn to_raw(self) -> String {
         match self {
             ActivityType::Follow => "Follow".to_string(),
+            ActivityType::Accept => "Accept".to_string(),
+            ActivityType::Create => "Create".to_string(),
+            ActivityType::Unknown => "FIXME".to_string()
         }
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct Activity {
+pub struct Activity<T : Serialize + Debug> {
     pub id: String,
     pub ty: ActivityType,
-    pub object: String,
+    pub object: T,
     pub published: DateTime<Local>,
+    pub to: Vec<String>,
+    pub cc: Vec<String>,
+}
+
+impl <T : Serialize + Debug + Default> Default for Activity<T> {
+    fn default() -> Self {
+        Self {
+            id: Default::default(),
+            ty: ActivityType::Unknown,
+            object: Default::default(),
+            published: Local::now(),
+            to: Default::default(),
+            cc: Default::default(),
+        }
+    }
 }
 
 pub type KeyId = String;
 
 #[derive(Debug, Clone)]
-pub struct OutgoingActivity {
+pub struct OutgoingActivity<T : Serialize + Debug> {
     pub signed_by: KeyId,
-    pub req: Activity,
+    pub req: Activity<T>,
     pub to: Actor,
 }
 
+impl <T : Serialize + Debug> OutgoingActivity<T> {
+    pub async fn save(&self, conn: impl sqlx::Executor<'_, Database = Sqlite>) {
+        let ty = self.req.ty.clone().to_raw();
+        sqlx::query!(
+            r#"
+            INSERT INTO activity (id, ty, actor_id)
+            VALUES (?1, ?2, ?3) 
+        "#,
+            self.req.id,
+            ty,
+            self.to.id
+        )
+        .execute(conn)
+        .await
+        .unwrap();
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug)]
-struct RawActivity {
+struct RawActivity<T : Serialize + Debug> {
     #[serde(rename = "@context")]
     #[serde(skip_deserializing)]
     context: String,
@@ -138,7 +184,7 @@ struct RawActivity {
     ty: String,
 
     actor: String,
-    object: String,
+    object: T,
     published: String,
 }
 
@@ -153,7 +199,7 @@ impl<'a> Outbox<'a> {
         &self.user
     }
 
-    pub async fn post(&self, activity: OutgoingActivity) {
+    pub async fn post<T : Serialize + Debug>(&self, activity: OutgoingActivity<T>) {
         dbg!(&activity);
         let raw = RawActivity {
             context: "https://www.w3.org/ns/activitystreams".to_string(),

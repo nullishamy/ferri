@@ -1,0 +1,10 @@
+CREATE TABLE IF NOT EXISTS activity
+(
+	-- UUID
+	id TEXT PRIMARY KEY NOT NULL,
+  ty TEXT NOT NULL,
+  actor_id TEXT NOT NULL,
+
+	FOREIGN KEY(actor_id) REFERENCES actor(id)
+);
+

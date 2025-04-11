@@ -1,4 +1,3 @@
-use chrono::Local;
 use main::ap;
 use rocket::{
     State, get, post,
@@ -72,7 +71,7 @@ pub async fn new_follow(
         id: format!("https://ferri.amy.mov/activities/{}", Uuid::new_v4()),
         ty: ap::ActivityType::Follow,
         object: followed.actor_id().to_string(),
-        published: Local::now(),
+        ..Default::default()
     };
 
     let req = ap::OutgoingActivity {
@@ -84,5 +83,6 @@ pub async fn new_follow(
         to: followed.actor().clone(),
     };
 
+    req.save(&mut **db).await;
     outbox.post(req).await;
 }
