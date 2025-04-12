@@ -26,7 +26,7 @@ pub struct Token {
 #[post("/oauth/token")]
 pub async fn new_token() -> Json<Token> {
     Json(Token {
-        access_token: "access-token".to_string(),
+        access_token: "9b9d497b-2731-435f-a929-e609ca69dac9".to_string(),
         token_type: "Bearer".to_string(),
         expires_in: 3600,
         scope: "read write follow push".to_string(),

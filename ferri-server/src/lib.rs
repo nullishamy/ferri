@@ -41,6 +41,7 @@ impl<'a> FromRequest<'a> for AuthenticatedUser {
     type Error = LoginError;
     async fn from_request(request: &'a Request<'_>) -> Outcome<AuthenticatedUser, LoginError> {
         let token = request.headers().get_one("Authorization").unwrap();
+        let token = token.strip_prefix("Bearer").map(|s| s.trim()).unwrap_or(token);
         Outcome::Success(AuthenticatedUser {
             username: token.to_string(),
             actor_id: format!("https://ferri.amy.mov/users/{}", token)
@@ -80,7 +81,10 @@ pub fn launch() -> Rocket<Build> {
             "/api/v1",
             routes![
                 api::status::new_status,
+                api::status::new_status_json,
                 api::user::new_follow,
+                api::user::statuses,
+                api::user::account,
                 api::apps::new_app,
                 api::preferences::preferences,
                 api::user::verify_credentials,

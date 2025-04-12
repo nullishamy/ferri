@@ -25,7 +25,7 @@ pub async fn webfinger(mut db: Connection<Db>, resource: &str) -> Json<Webfinger
     Json(WebfingerResponse {
         subject: resource.to_string(),
         aliases: vec![
-            format!("https://ferri.amy.mov/users/{}", user.username()),
+            format!("https://ferri.amy.mov/users/{}", user.id()),
             format!("https://ferri.amy.mov/@{}", user.username()),
         ],
         links: vec![
@@ -37,7 +37,7 @@ pub async fn webfinger(mut db: Connection<Db>, resource: &str) -> Json<Webfinger
             Link {
                 rel: "self".to_string(),
                 ty: Some("application/activity+json".to_string()),
-                href: Some(format!("https://ferri.amy.mov/users/{}", user.username())),
+                href: Some(format!("https://ferri.amy.mov/users/{}", user.id())),
             },
         ],
     })

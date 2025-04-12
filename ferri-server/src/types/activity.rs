@@ -10,9 +10,12 @@ pub struct MinimalActivity {
     pub ty: String,
 }
 
+pub type DeleteActivity = BasicActivity;
+pub type LikeActivity = BasicActivity;
+
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(crate = "rocket::serde")]
-pub struct DeleteActivity {
+pub struct BasicActivity {
     pub id: String,
     #[serde(rename = "type")]
     pub ty: String,

@@ -47,6 +47,34 @@ impl User {
         &self.actor
     }
 
+    pub async fn from_id(
+        uuid: &str,
+        conn: impl sqlx::Executor<'_, Database = Sqlite>,
+    ) -> User {
+        let user = sqlx::query!(
+            r#"
+                SELECT u.*, a.id as "actor_own_id", a.inbox, a.outbox
+                FROM user u
+                INNER JOIN actor a ON u.actor_id = a.id
+                WHERE u.id = ?1
+            "#,
+            uuid
+        )
+        .fetch_one(conn)
+        .await
+        .unwrap();
+        User {
+            id: user.id,
+            username: user.username,
+            actor: Actor {
+                id: user.actor_own_id,
+                inbox: user.inbox,
+                outbox: user.outbox,
+            },
+            display_name: user.display_name,
+        }
+    }
+
     pub async fn from_username(
         username: &str,
         conn: impl sqlx::Executor<'_, Database = Sqlite>,

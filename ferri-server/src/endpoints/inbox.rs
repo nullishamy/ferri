@@ -111,6 +111,13 @@ async fn handle_follow_activity(followed_account: String, activity: activity::Fo
     outbox.post(req).await;
 }
 
+async fn handle_like_activity(activity: activity::LikeActivity, mut db: Connection<Db>) {
+    let target_post = sqlx::query!("SELECT * FROM post WHERE uri = ?1", activity.object)
+        .fetch_one(&mut **db)
+        .await.unwrap();
+    dbg!(&target_post);
+}
+
 async fn handle_create_activity(activity: activity::CreateActivity,http: &HttpClient, mut db: Connection<Db>) {
     assert!(&activity.object.ty == "Note");
     let user = http
@@ -128,21 +135,17 @@ async fn handle_create_activity(activity: activity::CreateActivity,http: &HttpCl
 
     let user = ap::User::from_actor_id(&activity.actor, &mut **db).await;
 
-    let post_id = Uuid::new_v4();
-
-    let uri = format!(
-        "https://ferri.amy.mov/users/{}/posts/{}",
-        user.username(),
-        post_id
-    );
-    let id = user.id();
+    let user_id = user.id();
     let now = Local::now().to_rfc3339();
     let content = activity.object.content.clone();
+    let post_id = Uuid::new_v4().to_string();
+    let uri = activity.id;
+
 
     sqlx::query!(r#"
-        INSERT INTO post (id, user_id, content, created_at)
-        VALUES (?1, ?2, ?3, ?4)
-    "#, uri, id, content, now)
+        INSERT INTO post (id, uri, user_id, content, created_at)
+        VALUES (?1, ?2, ?3, ?4, ?5)
+    "#, post_id, uri, user_id, content, now)
         .execute(&mut **db)
         .await.unwrap();
 }
@@ -162,6 +165,10 @@ pub async fn inbox(db: Connection<Db>, http: &State<HttpClient>, user: String, b
         "Create" => {
             let activity = serde_json::from_str::<activity::CreateActivity>(&body).unwrap();
             handle_create_activity(activity, http.inner(), db).await;
+        },
+        "Like" => {
+            let activity = serde_json::from_str::<activity::LikeActivity>(&body).unwrap();
+            handle_like_activity(activity, db).await;
         },
         unknown => {
             eprintln!("WARN: Unknown activity '{}' - {}", unknown, body);

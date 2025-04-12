@@ -31,9 +31,9 @@ pub async fn outbox(user: String) -> Json<OrderedCollection> {
     })
 }
 
-#[get("/users/<user>/followers")]
-pub async fn followers(mut db: Connection<Db>, user: String) -> Json<OrderedCollection> {
-    let target = ap::User::from_username(&user, &mut **db).await;
+#[get("/users/<uuid>/followers")]
+pub async fn followers(mut db: Connection<Db>, uuid: &str) -> Json<OrderedCollection> {
+    let target = ap::User::from_id(uuid, &mut **db).await;
     let actor_id = target.actor_id();
 
     let followers = sqlx::query!(
@@ -49,7 +49,7 @@ pub async fn followers(mut db: Connection<Db>, user: String) -> Json<OrderedColl
 
     Json(OrderedCollection {
         ty: "OrderedCollection".to_string(),
-        summary: format!("Followers for {}", user),
+        summary: format!("Followers for {}", uuid),
         total_items: 1,
         ordered_items: followers
             .into_iter()
@@ -58,9 +58,9 @@ pub async fn followers(mut db: Connection<Db>, user: String) -> Json<OrderedColl
     })
 }
 
-#[get("/users/<user>/following")]
-pub async fn following(mut db: Connection<Db>, user: String) -> Json<OrderedCollection> {
-    let target = ap::User::from_username(&user, &mut **db).await;
+#[get("/users/<uuid>/following")]
+pub async fn following(mut db: Connection<Db>, uuid: &str) -> Json<OrderedCollection> {
+    let target = ap::User::from_id(uuid, &mut **db).await;
     let actor_id = target.actor_id();
 
     let following = sqlx::query!(
@@ -76,7 +76,7 @@ pub async fn following(mut db: Connection<Db>, user: String) -> Json<OrderedColl
 
     Json(OrderedCollection {
         ty: "OrderedCollection".to_string(),
-        summary: format!("Following for {}", user),
+        summary: format!("Following for {}", uuid),
         total_items: 1,
         ordered_items: following
             .into_iter()
@@ -85,40 +85,47 @@ pub async fn following(mut db: Connection<Db>, user: String) -> Json<OrderedColl
     })
 }
 
-#[get("/users/<user>/posts/<post>")]
-pub async fn post(user: String, post: String) -> (ContentType, Json<content::Post>) {
+#[get("/users/<uuid>/posts/<post>")]
+pub async fn post(mut db: Connection<Db>, uuid: &str, post: String) -> (ContentType, Json<content::Post>) {
+    let post = sqlx::query!(r#"
+        SELECT * FROM post WHERE id = ?1
+    "#, post)
+        .fetch_one(&mut **db)
+        .await.unwrap();
+
     (
         activity_type(),
         Json(content::Post {
-            id: format!("https://ferri.amy.mov/users/{}/posts/{}", user, post),
             context: "https://www.w3.org/ns/activitystreams".to_string(),
+            id: format!("https://ferri.amy.mov/users/{}/posts/{}", uuid, post.id),
             ty: "Note".to_string(),
-            content: "My first post".to_string(),
-            ts: "2025-04-10T10:48:11Z".to_string(),
+            content: post.content,
+            ts: post.created_at,
             to: vec!["https://ferri.amy.mov/users/amy/followers".to_string()],
             cc: vec!["https://www.w3.org/ns/activitystreams#Public".to_string()],
         }),
     )
 }
 
-#[get("/users/<user>")]
-pub async fn user(user: String) -> (ContentType, Json<Person>) {
+#[get("/users/<uuid>")]
+pub async fn user(mut db: Connection<Db>, uuid: &str) -> (ContentType, Json<Person>) {
+    let user = ap::User::from_id(uuid, &mut **db).await;
     (
         activity_type(),
         Json(Person {
             context: "https://www.w3.org/ns/activitystreams".to_string(),
             ty: "Person".to_string(),
-            id: format!("https://ferri.amy.mov/users/{}", user),
-            name: user.clone(),
-            preferred_username: user.clone(),
-            followers: format!("https://ferri.amy.mov/users/{}/followers", user),
-            following: format!("https://ferri.amy.mov/users/{}/following", user),
-            summary: format!("ferri {}", user),
-            inbox: format!("https://ferri.amy.mov/users/{}/inbox", user),
-            outbox: format!("https://ferri.amy.mov/users/{}/outbox", user),
+            id: user.id().to_string(),
+            name: user.username().to_string(),
+            preferred_username: user.display_name().to_string(),
+            followers: format!("https://ferri.amy.mov/users/{}/followers", uuid),
+            following: format!("https://ferri.amy.mov/users/{}/following", uuid),
+            summary: format!("ferri {}", user.username()),
+            inbox: format!("https://ferri.amy.mov/users/{}/inbox", uuid),
+            outbox: format!("https://ferri.amy.mov/users/{}/outbox", uuid),
             public_key: Some(UserKey {
-                id: format!("https://ferri.amy.mov/users/{}#main-key", user),
-                owner: format!("https://ferri.amy.mov/users/{}", user),
+                id: format!("https://ferri.amy.mov/users/{}#main-key", uuid),
+                owner: format!("https://ferri.amy.mov/users/{}", uuid),
                 public_key: include_str!("../../../public.pem").to_string(),
             }),
         }),
