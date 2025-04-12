@@ -1,10 +1,13 @@
 use main::ap::http::HttpClient;
-use rocket::{get, response::status, State};
+use rocket::{State, get, response::status};
 use rocket_db_pools::Connection;
 
 use uuid::Uuid;
 
-use crate::{types::{self, activity, content, webfinger}, Db};
+use crate::{
+    Db,
+    types::{self, activity, content, webfinger},
+};
 
 #[get("/finger/<account>")]
 pub async fn finger_account(mut db: Connection<Db>, account: &str) -> status::Accepted<String> {
@@ -109,9 +112,11 @@ pub async fn test(http: &State<HttpClient>) -> &'static str {
         .sign(key_id)
         .activity()
         .send()
-        .await.unwrap()
+        .await
+        .unwrap()
         .text()
-        .await.unwrap();
+        .await
+        .unwrap();
 
     dbg!(follow);
 

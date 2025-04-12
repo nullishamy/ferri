@@ -35,10 +35,11 @@ pub struct TimelineStatus {
 pub async fn home(mut db: Connection<Db>, limit: i64) -> Json<Vec<TimelineStatus>> {
     let posts = sqlx::query!(
         r#"
-        SELECT p.id as "post_id", u.id as "user_id", p.content, p.uri as "post_uri", u.username, u.display_name, u.actor_id, p.created_at 
-        FROM post p
-        INNER JOIN user u on p.user_id = u.id
-    "#
+            SELECT p.id as "post_id", u.id as "user_id", p.content, p.uri as "post_uri", 
+                u.username, u.display_name, u.actor_id, p.created_at 
+            FROM post p
+            INNER JOIN user u on p.user_id = u.id
+        "#
     )
     .fetch_all(&mut **db)
     .await

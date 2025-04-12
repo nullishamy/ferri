@@ -1,4 +1,7 @@
-use rocket::{serde::{Deserialize, Serialize}, FromForm};
+use rocket::{
+    FromForm,
+    serde::{Deserialize, Serialize},
+};
 
 #[derive(Serialize, Deserialize, Debug, FromForm)]
 #[serde(crate = "rocket::serde")]

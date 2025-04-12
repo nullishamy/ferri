@@ -6,8 +6,8 @@ use rocket::{
 use rocket_db_pools::Connection;
 use uuid::Uuid;
 
+use crate::timeline::{TimelineAccount, TimelineStatus};
 use crate::{AuthenticatedUser, Db, http::HttpClient};
-use crate::timeline::{TimelineStatus, TimelineAccount};
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(crate = "rocket::serde")]
@@ -35,7 +35,7 @@ pub struct CredentialAcount {
 #[get("/accounts/verify_credentials")]
 pub async fn verify_credentials() -> Json<CredentialAcount> {
     Json(CredentialAcount {
-        id: "https://ferri.amy.mov/users/amy".to_string(),
+        id: "9b9d497b-2731-435f-a929-e609ca69dac9".to_string(),
         username: "amy".to_string(),
         acct: "amy@ferri.amy.mov".to_string(),
         display_name: "amy".to_string(),
@@ -89,7 +89,11 @@ pub async fn new_follow(
 }
 
 #[get("/accounts/<uuid>")]
-pub async fn account(mut db: Connection<Db>, uuid: &str, user: AuthenticatedUser) -> Json<TimelineAccount> {
+pub async fn account(
+    mut db: Connection<Db>,
+    uuid: &str,
+    user: AuthenticatedUser,
+) -> Json<TimelineAccount> {
     let user = ap::User::from_id(uuid, &mut **db).await;
     let user_uri = format!("https://ferri.amy.mov/users/{}", user.username());
     Json(CredentialAcount {

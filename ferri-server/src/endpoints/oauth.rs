@@ -1,4 +1,8 @@
-use rocket::{get, post, response::Redirect, serde::{json::Json, Deserialize, Serialize}};
+use rocket::{
+    get, post,
+    response::Redirect,
+    serde::{Deserialize, Serialize, json::Json},
+};
 
 #[get("/oauth/authorize?<client_id>&<scope>&<redirect_uri>&<response_type>")]
 pub async fn authorize(

@@ -6,7 +6,6 @@ pub mod webfinger;
 
 use rocket::serde::{Deserialize, Serialize};
 
-
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 #[serde(crate = "rocket::serde")]
@@ -31,11 +30,11 @@ pub struct Person {
     pub ty: String,
     pub following: String,
     pub followers: String,
+    pub summary: String,
     pub inbox: String,
     pub outbox: String,
     pub preferred_username: String,
     pub name: String,
-    pub summary: String,
     pub public_key: Option<UserKey>,
 }
 
@@ -53,7 +52,6 @@ pub struct Object {
 #[serde(rename_all = "camelCase")]
 #[serde(crate = "rocket::serde")]
 pub struct OrderedCollection {
-    pub summary: String,
     #[serde(rename = "type")]
     pub ty: String,
     pub total_items: u64,

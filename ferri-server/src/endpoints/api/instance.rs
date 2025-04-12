@@ -1,6 +1,9 @@
 use rocket::{get, serde::json::Json};
 
-use crate::types::instance::{Accounts, Configuration, Contact, Instance, MediaAttachments, Polls, Registrations, Statuses, Thumbnail, Translation, Urls};
+use crate::types::instance::{
+    Accounts, Configuration, Contact, Instance, MediaAttachments, Polls, Registrations, Statuses,
+    Thumbnail, Translation, Urls,
+};
 
 #[get("/instance")]
 pub async fn instance() -> Json<Instance> {

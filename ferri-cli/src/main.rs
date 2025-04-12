@@ -28,9 +28,9 @@ async fn main() {
           INSERT INTO actor (id, inbox, outbox)
           VALUES (?1, ?2, ?3)
         "#,
-            "https://ferri.amy.mov/users/amy",
-            "https://ferri.amy.mov/users/amy/inbox",
-            "https://ferri.amy.mov/users/amy/outbox"
+            "https://ferri.amy.mov/users/c81db53f-d836-4283-a835-26606c9d14ff",
+            "https://ferri.amy.mov/users/c81db53f-d836-4283-a835-26606c9d14ff/inbox",
+            "https://ferri.amy.mov/users/c81db53f-d836-4283-a835-26606c9d14ff/outbox"
         )
         .execute(&mut *conn)
         .await
@@ -43,7 +43,7 @@ async fn main() {
         "#,
             "9b9d497b-2731-435f-a929-e609ca69dac9",
             "amy",
-            "https://ferri.amy.mov/users/amy",
+            "https://ferri.amy.mov/users/c81db53f-d836-4283-a835-26606c9d14ff",
             "amy"
         )
         .execute(&mut *conn)

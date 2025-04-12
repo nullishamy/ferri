@@ -1,6 +1,8 @@
 use rocket::{
-    options, fairing::{Fairing, Info, Kind},
-    Request, Response, http::{Method, Header}
+    Request, Response,
+    fairing::{Fairing, Info, Kind},
+    http::{Header, Method},
+    options,
 };
 
 pub struct CORS;

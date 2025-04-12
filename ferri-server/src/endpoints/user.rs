@@ -7,14 +7,12 @@ use crate::{
     types::{OrderedCollection, Person, UserKey, content},
 };
 
-
 use super::activity_type;
 
 #[get("/users/<user>/inbox")]
 pub async fn inbox(user: String) -> Json<OrderedCollection> {
     Json(OrderedCollection {
         ty: "OrderedCollection".to_string(),
-        summary: format!("Inbox for {}", user),
         total_items: 0,
         ordered_items: vec![],
     })
@@ -25,7 +23,6 @@ pub async fn outbox(user: String) -> Json<OrderedCollection> {
     dbg!(&user);
     Json(OrderedCollection {
         ty: "OrderedCollection".to_string(),
-        summary: format!("Outbox for {}", user),
         total_items: 0,
         ordered_items: vec![],
     })
@@ -49,7 +46,6 @@ pub async fn followers(mut db: Connection<Db>, uuid: &str) -> Json<OrderedCollec
 
     Json(OrderedCollection {
         ty: "OrderedCollection".to_string(),
-        summary: format!("Followers for {}", uuid),
         total_items: 1,
         ordered_items: followers
             .into_iter()
@@ -76,7 +72,6 @@ pub async fn following(mut db: Connection<Db>, uuid: &str) -> Json<OrderedCollec
 
     Json(OrderedCollection {
         ty: "OrderedCollection".to_string(),
-        summary: format!("Following for {}", uuid),
         total_items: 1,
         ordered_items: following
             .into_iter()
@@ -86,12 +81,20 @@ pub async fn following(mut db: Connection<Db>, uuid: &str) -> Json<OrderedCollec
 }
 
 #[get("/users/<uuid>/posts/<post>")]
-pub async fn post(mut db: Connection<Db>, uuid: &str, post: String) -> (ContentType, Json<content::Post>) {
-    let post = sqlx::query!(r#"
+pub async fn post(
+    mut db: Connection<Db>,
+    uuid: &str,
+    post: String,
+) -> (ContentType, Json<content::Post>) {
+    let post = sqlx::query!(
+        r#"
         SELECT * FROM post WHERE id = ?1
-    "#, post)
-        .fetch_one(&mut **db)
-        .await.unwrap();
+    "#,
+        post
+    )
+    .fetch_one(&mut **db)
+    .await
+    .unwrap();
 
     (
         activity_type(),

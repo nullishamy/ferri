@@ -51,7 +51,8 @@ impl RequestBuilder {
     }
 
     pub fn activity(mut self) -> RequestBuilder {
-        self.inner = self.inner
+        self.inner = self
+            .inner
             .header("Content-Type", "application/activity+json")
             .header("Accept", "application/activity+json");
         self
@@ -66,14 +67,16 @@ impl RequestBuilder {
         match self.verb {
             RequestVerb::GET => {
                 let sig = self.sign_get_request(key_id);
-                self.inner = self.inner
+                self.inner = self
+                    .inner
                     .header("Date", sig.date)
                     .header("Signature", sig.signature);
                 self
             }
             RequestVerb::POST => {
                 let sig = self.sign_post_request(key_id);
-                self.inner = self.inner
+                self.inner = self
+                    .inner
                     .header("Date", sig.date)
                     .header("Digest", sig.digest)
                     .header("Signature", sig.signature);
@@ -87,7 +90,8 @@ impl RequestBuilder {
         let host = url.host_str().unwrap();
         let path = url.path();
 
-        let private_key = RsaPrivateKey::from_pkcs8_pem(include_str!("../../../private.pem")).unwrap();
+        let private_key =
+            RsaPrivateKey::from_pkcs8_pem(include_str!("../../../private.pem")).unwrap();
         let signing_key = SigningKey::<Sha256>::new(private_key);
 
         // UTC=GMT for our purposes, use it
@@ -122,7 +126,8 @@ impl RequestBuilder {
         let host = url.host_str().unwrap();
         let path = url.path();
 
-        let private_key = RsaPrivateKey::from_pkcs8_pem(include_str!("../../../private.pem")).unwrap();
+        let private_key =
+            RsaPrivateKey::from_pkcs8_pem(include_str!("../../../private.pem")).unwrap();
         let signing_key = SigningKey::<Sha256>::new(private_key);
 
         let mut hasher = Sha256::new();

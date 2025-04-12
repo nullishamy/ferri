@@ -1,13 +1,19 @@
+use endpoints::{
+    api::{self, timeline},
+    custom, inbox, oauth, user, well_known,
+};
 use main::ap::http;
 use rocket::{
-    build, get, http::ContentType, request::{FromRequest, Outcome}, routes, Build, Request, Rocket
+    Build, Request, Rocket, build, get,
+    http::ContentType,
+    request::{FromRequest, Outcome},
+    routes,
 };
-use endpoints::{api::{self, timeline}, oauth, well_known, custom, user, inbox};
-use rocket_db_pools::{sqlx, Database};
+use rocket_db_pools::{Database, sqlx};
 
 mod cors;
-mod types;
 mod endpoints;
+mod types;
 
 #[derive(Database)]
 #[database("sqlite_ferri")]
@@ -26,7 +32,7 @@ async fn activity_endpoint(activity: String) {
 #[derive(Debug)]
 struct AuthenticatedUser {
     username: String,
-    actor_id: String
+    actor_id: String,
 }
 
 #[derive(Debug)]
@@ -41,10 +47,13 @@ impl<'a> FromRequest<'a> for AuthenticatedUser {
     type Error = LoginError;
     async fn from_request(request: &'a Request<'_>) -> Outcome<AuthenticatedUser, LoginError> {
         let token = request.headers().get_one("Authorization").unwrap();
-        let token = token.strip_prefix("Bearer").map(|s| s.trim()).unwrap_or(token);
+        let token = token
+            .strip_prefix("Bearer")
+            .map(|s| s.trim())
+            .unwrap_or(token);
         Outcome::Success(AuthenticatedUser {
             username: token.to_string(),
-            actor_id: format!("https://ferri.amy.mov/users/{}", token)
+            actor_id: format!("https://ferri.amy.mov/users/{}", token),
         })
     }
 }

@@ -2,7 +2,10 @@ use main::ap;
 use rocket::{get, serde::json::Json};
 use rocket_db_pools::Connection;
 
-use crate::{types::webfinger::{Link, WebfingerResponse}, Db};
+use crate::{
+    Db,
+    types::webfinger::{Link, WebfingerResponse},
+};
 
 #[get("/.well-known/host-meta")]
 pub async fn host_meta() -> &'static str {
