@@ -335,6 +335,7 @@ dependencies = [
  "rocket",
  "server",
  "sqlx",
+ "toml",
 ]
 
 [[package]]

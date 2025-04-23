@@ -76,10 +76,7 @@ pub async fn new_follow(
     };
 
     let req = ap::OutgoingActivity {
-        signed_by: format!(
-            "https://ferri.amy.mov/users/{}#main-key",
-            follower.username()
-        ),
+        signed_by: format!("{}#main-key", follower.uri()),
         req: activity,
         to: followed.actor().clone(),
     };

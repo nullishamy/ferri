@@ -36,7 +36,7 @@ pub async fn finger_account(mut db: Connection<Db>, account: &str) -> status::Ac
         r#"
       INSERT INTO user (id, username, actor_id, display_name)
       VALUES (?1, ?2, ?3, ?4)
-      ON CONFLICT(id) DO NOTHING
+      ON CONFLICT(actor_id) DO NOTHING
     "#,
         uuid,
         username,
@@ -47,7 +47,7 @@ pub async fn finger_account(mut db: Connection<Db>, account: &str) -> status::Ac
     .await
     .unwrap();
 
-    status::Accepted(format!("https://ferri.amy.mov/users/{}", username))
+    status::Accepted(format!("https://ferri.amy.mov/users/{}", uuid))
 }
 
 pub async fn resolve_user(acct: &str, host: &str) -> types::Person {

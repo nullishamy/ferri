@@ -3,6 +3,7 @@ use endpoints::{
     custom, inbox, oauth, user, well_known,
 };
 use main::ap::http;
+use main::config::Config;
 use rocket::{
     Build, Request, Rocket, build, get,
     http::ContentType,
@@ -20,7 +21,8 @@ mod types;
 pub struct Db(sqlx::SqlitePool);
 
 #[get("/")]
-async fn user_profile() -> (ContentType, &'static str) {
+async fn user_profile(cfg: &rocket::State<Config>) -> (ContentType, &'static str) {
+    dbg!(cfg);
     (ContentType::HTML, "<p>hello</p>")
 }
 
@@ -58,9 +60,10 @@ impl<'a> FromRequest<'a> for AuthenticatedUser {
     }
 }
 
-pub fn launch() -> Rocket<Build> {
+pub fn launch(cfg: Config) -> Rocket<Build> {
     let http_client = http::HttpClient::new();
     build()
+        .manage(cfg)
         .manage(http_client)
         .attach(Db::init())
         .attach(cors::CORS)

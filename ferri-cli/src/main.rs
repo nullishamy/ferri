@@ -5,17 +5,30 @@ use sqlx::sqlite::SqlitePool;
 use std::env;
 
 use clap::Parser;
+use main::config;
+use std::fs;
+use std::path::{Path, PathBuf};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
 struct Cli {
     #[arg(short, long)]
     init: bool,
+
+    #[arg(short, long)]
+    config: PathBuf,
+}
+
+pub fn read_config(path: impl AsRef<Path>) -> config::Config {
+    let content = fs::read_to_string(path).unwrap();
+    toml::from_str(&content).unwrap()
 }
 
 #[rocket::main]
 async fn main() {
     let cli = Cli::parse();
+    let config = read_config(cli.config);
+
     if cli.init {
         // Seed DB
         let pool = SqlitePool::connect(&env::var("DATABASE_URL").unwrap())
@@ -28,9 +41,9 @@ async fn main() {
           INSERT INTO actor (id, inbox, outbox)
           VALUES (?1, ?2, ?3)
         "#,
-            "https://ferri.amy.mov/users/c81db53f-d836-4283-a835-26606c9d14ff",
-            "https://ferri.amy.mov/users/c81db53f-d836-4283-a835-26606c9d14ff/inbox",
-            "https://ferri.amy.mov/users/c81db53f-d836-4283-a835-26606c9d14ff/outbox"
+            "https://ferri.amy.mov/users/9b9d497b-2731-435f-a929-e609ca69dac9",
+            "https://ferri.amy.mov/users/9b9d497b-2731-435f-a929-e609ca69dac9/inbox",
+            "https://ferri.amy.mov/users/9b9d497b-2731-435f-a929-e609ca69dac9/outbox"
         )
         .execute(&mut *conn)
         .await
@@ -43,13 +56,13 @@ async fn main() {
         "#,
             "9b9d497b-2731-435f-a929-e609ca69dac9",
             "amy",
-            "https://ferri.amy.mov/users/c81db53f-d836-4283-a835-26606c9d14ff",
+            "https://ferri.amy.mov/users/9b9d497b-2731-435f-a929-e609ca69dac9",
             "amy"
         )
         .execute(&mut *conn)
         .await
         .unwrap();
     } else {
-        let _ = launch().launch().await;
+        let _ = launch(config).launch().await;
     }
 }
