@@ -11,5 +11,6 @@ reqwest = { workspace = true }
 sqlx = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
+rand = { workspace = true }
 
 url = "2.5.4"

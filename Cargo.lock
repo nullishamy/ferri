@@ -2156,6 +2156,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "main",
+ "rand 0.8.5",
  "reqwest",
  "rocket",
  "rocket_db_pools",

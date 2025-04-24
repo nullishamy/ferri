@@ -1,4 +1,4 @@
-use crate::{Db, endpoints::api::user::CredentialAcount};
+use crate::{AuthenticatedUser, Db, endpoints::api::user::CredentialAcount};
 use rocket::{
     get,
     serde::{Deserialize, Serialize, json::Json},
@@ -32,7 +32,12 @@ pub struct TimelineStatus {
 }
 
 #[get("/timelines/home?<limit>")]
-pub async fn home(mut db: Connection<Db>, limit: i64) -> Json<Vec<TimelineStatus>> {
+pub async fn home(
+    mut db: Connection<Db>,
+    limit: i64,
+    user: AuthenticatedUser,
+) -> Json<Vec<TimelineStatus>> {
+    dbg!(user);
     let posts = sqlx::query!(
         r#"
             SELECT p.id as "post_id", u.id as "user_id", p.content, p.uri as "post_uri", 

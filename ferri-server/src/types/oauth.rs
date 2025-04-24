@@ -3,7 +3,7 @@ use rocket::{
     serde::{Deserialize, Serialize},
 };
 
-#[derive(Serialize, Deserialize, Debug, FromForm)]
+#[derive(Serialize, Deserialize, Debug, FromForm, Clone)]
 #[serde(crate = "rocket::serde")]
 pub struct App {
     pub client_name: String,
