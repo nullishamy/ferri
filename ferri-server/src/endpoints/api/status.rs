@@ -1,22 +1,41 @@
 use crate::timeline::TimelineStatus;
-use chrono::Local;
 use main::ap::{self, http::HttpClient};
 use rocket::{
     FromForm, State,
     form::Form,
     post,
+    get,
     serde::{Deserialize, Serialize, json::Json},
 };
 use rocket_db_pools::Connection;
 use uuid::Uuid;
 
 use crate::api::user::CredentialAcount;
-use crate::{AuthenticatedUser, Db, types::content};
+use crate::{AuthenticatedUser, Db};
 
 #[derive(Serialize, Deserialize, Debug, FromForm)]
 #[serde(crate = "rocket::serde")]
 pub struct Status {
     status: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, FromForm)]
+#[serde(crate = "rocket::serde")]
+pub struct StatusContext {
+    ancestors: Vec<Status>,
+    descendants: Vec<Status>
+}
+
+#[get("/statuses/<status>/context")]
+pub async fn status_context(
+    status: &str,
+    user: AuthenticatedUser,
+    mut db: Connection<Db>
+) -> Json<StatusContext> {
+    Json(StatusContext {
+        ancestors: vec![],
+        descendants: vec![],
+    })
 }
 
 async fn create_status(
@@ -25,11 +44,11 @@ async fn create_status(
     http: &HttpClient,
     status: &Status,
 ) -> TimelineStatus {
-    let user = ap::User::from_id(&user.username, &mut **db).await;
+    let user = ap::User::from_id(&user.id, &mut **db).await.unwrap();
     let outbox = ap::Outbox::for_user(user.clone(), http);
 
     let post_id = ap::new_id();
-    let now = ap::new_ts();
+    let now = ap::now();
 
     let post = ap::Post::from_parts(post_id, status.status.clone(), user.clone())
         .to(format!("{}/followers", user.uri()))
@@ -55,6 +74,7 @@ async fn create_status(
             ty: ap::ActivityType::Create,
             object: post.clone().to_ap(),
             to: vec![format!("{}/followers", user.uri())],
+            published: now,
             cc: vec!["https://www.w3.org/ns/activitystreams#Public".to_string()],
             ..Default::default()
         };

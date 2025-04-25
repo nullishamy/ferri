@@ -23,10 +23,10 @@ pub async fn authorize(
     // This will act as a token for the user, but we will in future say that it expires very shortly
     // and can only be used for obtaining an access token etc
     sqlx::query!(
-        r#"
-      INSERT INTO auth (token, user_id)
-      VALUES (?1, ?2)
-    "#,
+      r#"
+        INSERT INTO auth (token, user_id)
+        VALUES (?1, ?2)
+      "#,
         code,
         user_id
     )
@@ -35,7 +35,7 @@ pub async fn authorize(
     .unwrap();
 
     let id_token = main::gen_token(10);
-    
+
     // Add an oauth entry for the `code` which /oauth/token will rewrite
     sqlx::query!(
         r#"
@@ -67,7 +67,7 @@ pub struct Token {
 
 #[derive(Deserialize, Debug, FromForm)]
 #[serde(crate = "rocket::serde")]
-struct NewTokenRequest {
+pub struct NewTokenRequest {
     client_id: String,
     redirect_uri: String,
     grant_type: String,
@@ -77,19 +77,15 @@ struct NewTokenRequest {
 
 #[post("/oauth/token", data = "<req>")]
 pub async fn new_token(req: Form<NewTokenRequest>, mut db: Connection<Db>) -> Json<Token> {
-    let oauth = sqlx::query!(
-        r#"
+    let oauth = sqlx::query!("
       SELECT o.*, a.*
       FROM oauth o
       INNER JOIN auth a ON a.token = ?2
       WHERE o.access_token = ?1
-    "#,
-        req.code,
-        req.code
-    )
-    .fetch_one(&mut **db)
-    .await
-    .unwrap();
+    ", req.code, req.code)
+        .fetch_one(&mut **db)
+        .await
+        .unwrap();
 
     let access_token = main::gen_token(15);
 

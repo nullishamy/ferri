@@ -118,7 +118,5 @@ pub async fn test(http: &State<HttpClient>) -> &'static str {
         .await
         .unwrap();
 
-    dbg!(follow);
-
     "Hello, world!"
 }

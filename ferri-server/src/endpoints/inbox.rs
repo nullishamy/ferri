@@ -6,6 +6,7 @@ use rocket_db_pools::Connection;
 use sqlx::Sqlite;
 use url::Url;
 use uuid::Uuid;
+use tracing::{event, span, Level, debug, warn, info};
 
 use crate::{
     Db,
@@ -14,12 +15,12 @@ use crate::{
 };
 
 fn handle_delete_activity(activity: activity::DeleteActivity) {
-    dbg!(activity);
+    warn!(?activity, "unimplemented delete activity");
 }
 
 async fn create_actor(
     user: &Person,
-    actor: String,
+    actor: &str,
     conn: impl sqlx::Executor<'_, Database = Sqlite>,
 ) {
     sqlx::query!(
@@ -39,7 +40,7 @@ async fn create_actor(
 
 async fn create_user(
     user: &Person,
-    actor: String,
+    actor: &str,
     conn: impl sqlx::Executor<'_, Database = Sqlite>,
 ) {
     // HACK: Allow us to formulate a `user@host` username by assuming the actor is on the same host as the user
@@ -84,7 +85,7 @@ async fn create_follow(
 }
 
 async fn handle_follow_activity(
-    followed_account: String,
+    followed_account: &str,
     activity: activity::FollowActivity,
     http: &HttpClient,
     mut db: Connection<Db>,
@@ -99,8 +100,8 @@ async fn handle_follow_activity(
         .await
         .unwrap();
 
-    create_actor(&user, activity.actor.clone(), &mut **db).await;
-    create_user(&user, activity.actor.clone(), &mut **db).await;
+    create_actor(&user, &activity.actor, &mut **db).await;
+    create_user(&user, &activity.actor, &mut **db).await;
     create_follow(&activity, &mut **db).await;
 
     let follower = ap::User::from_actor_id(&activity.actor, &mut **db).await;
@@ -128,11 +129,17 @@ async fn handle_follow_activity(
 }
 
 async fn handle_like_activity(activity: activity::LikeActivity, mut db: Connection<Db>) {
+    warn!(?activity, "unimplemented like activity");
+    
     let target_post = sqlx::query!("SELECT * FROM post WHERE uri = ?1", activity.object)
         .fetch_one(&mut **db)
-        .await
-        .unwrap();
-    dbg!(&target_post);
+        .await;
+
+    if let Ok(post) = target_post {
+        warn!(?post, "tried to like post");
+    } else {
+        warn!(post = ?activity.object, "could not find post");
+    }
 }
 
 async fn handle_create_activity(
@@ -141,6 +148,8 @@ async fn handle_create_activity(
     mut db: Connection<Db>,
 ) {
     assert!(&activity.object.ty == "Note");
+    debug!("resolving user {}", activity.actor);
+    
     let user = http
         .get(&activity.actor)
         .activity()
@@ -151,16 +160,22 @@ async fn handle_create_activity(
         .await
         .unwrap();
 
-    create_actor(&user, activity.actor.clone(), &mut **db).await;
-    create_user(&user, activity.actor.clone(), &mut **db).await;
+    debug!("creating actor {}", activity.actor);
+    create_actor(&user, &activity.actor, &mut **db).await;
+
+    debug!("creating user {}", activity.actor);
+    create_user(&user, &activity.actor, &mut **db).await;
 
     let user = ap::User::from_actor_id(&activity.actor, &mut **db).await;
+    debug!("user created {:?}", user);
 
     let user_id = user.id();
     let now = Local::now().to_rfc3339();
     let content = activity.object.content.clone();
     let post_id = Uuid::new_v4().to_string();
     let uri = activity.id;
+
+    info!(post_id, "creating post");
 
     sqlx::query!(
         r#"
@@ -173,14 +188,19 @@ async fn handle_create_activity(
         content,
         now
     )
-    .execute(&mut **db)
-    .await
-    .unwrap();
+        .execute(&mut **db)
+        .await
+        .unwrap();
 }
 
 #[post("/users/<user>/inbox", data = "<body>")]
-pub async fn inbox(db: Connection<Db>, http: &State<HttpClient>, user: String, body: String) {
+pub async fn inbox(db: Connection<Db>, http: &State<HttpClient>, user: &str, body: String) {
     let min = serde_json::from_str::<activity::MinimalActivity>(&body).unwrap();
+    let inbox_span = span!(Level::INFO, "inbox-post", user_id = user);
+
+    let _enter = inbox_span.enter();
+    event!(Level::INFO, ?min, "received an activity");
+    
     match min.ty.as_str() {
         "Delete" => {
             let activity = serde_json::from_str::<activity::DeleteActivity>(&body).unwrap();
@@ -198,11 +218,11 @@ pub async fn inbox(db: Connection<Db>, http: &State<HttpClient>, user: String, b
             let activity = serde_json::from_str::<activity::LikeActivity>(&body).unwrap();
             handle_like_activity(activity, db).await;
         }
-        unknown => {
-            eprintln!("WARN: Unknown activity '{}' - {}", unknown, body);
+        act => {
+            warn!(act, body, "unknown activity");
         }
     }
 
-    dbg!(min);
-    println!("Body in inbox: {}", body);
+    debug!("body in inbox: {}", body);
+    drop(_enter)
 }

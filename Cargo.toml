@@ -10,3 +10,9 @@ sqlx = { version = "0.7", features = [ "runtime-tokio", "sqlite", "macros" ], de
 uuid = { version = "1.16.0", features = ["v4"] }
 chrono = "0.4.40"
 rand = "0.8"
+thiserror = "2.0.12"
+
+tracing = "0.1.40"
+tracing-appender = "0.2.3"
+tracing-log = "0.2.0"
+tracing-subscriber = { version = "0.3.18", features = ["env-filter", "json", "registry", "smallvec"] }

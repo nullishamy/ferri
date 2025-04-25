@@ -37,7 +37,6 @@ pub async fn home(
     limit: i64,
     user: AuthenticatedUser,
 ) -> Json<Vec<TimelineStatus>> {
-    dbg!(user);
     let posts = sqlx::query!(
         r#"
             SELECT p.id as "post_id", u.id as "user_id", p.content, p.uri as "post_uri", 

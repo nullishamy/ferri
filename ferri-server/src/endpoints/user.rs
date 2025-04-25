@@ -1,6 +1,7 @@
 use main::ap;
 use rocket::{get, http::ContentType, serde::json::Json};
 use rocket_db_pools::Connection;
+use rocket::response::status::NotFound;
 
 use crate::{
     Db,
@@ -20,7 +21,6 @@ pub async fn inbox(user: String) -> Json<OrderedCollection> {
 
 #[get("/users/<user>/outbox")]
 pub async fn outbox(user: String) -> Json<OrderedCollection> {
-    dbg!(&user);
     Json(OrderedCollection {
         ty: "OrderedCollection".to_string(),
         total_items: 0,
@@ -29,8 +29,11 @@ pub async fn outbox(user: String) -> Json<OrderedCollection> {
 }
 
 #[get("/users/<uuid>/followers")]
-pub async fn followers(mut db: Connection<Db>, uuid: &str) -> Json<OrderedCollection> {
-    let target = ap::User::from_id(uuid, &mut **db).await;
+pub async fn followers(mut db: Connection<Db>, uuid: &str) -> Result<Json<OrderedCollection>, NotFound<String>> {
+    let target = ap::User::from_id(uuid, &mut **db)
+        .await
+        .map_err(|e| NotFound(e.to_string()))?;
+    
     let actor_id = target.actor_id();
 
     let followers = sqlx::query!(
@@ -44,19 +47,22 @@ pub async fn followers(mut db: Connection<Db>, uuid: &str) -> Json<OrderedCollec
     .await
     .unwrap();
 
-    Json(OrderedCollection {
+    Ok(Json(OrderedCollection {
         ty: "OrderedCollection".to_string(),
         total_items: 1,
         ordered_items: followers
             .into_iter()
             .map(|f| f.follower_id)
             .collect::<Vec<_>>(),
-    })
+    }))
 }
 
 #[get("/users/<uuid>/following")]
-pub async fn following(mut db: Connection<Db>, uuid: &str) -> Json<OrderedCollection> {
-    let target = ap::User::from_id(uuid, &mut **db).await;
+pub async fn following(mut db: Connection<Db>, uuid: &str) -> Result<Json<OrderedCollection>, NotFound<String>> {
+    let target = ap::User::from_id(uuid, &mut **db)
+        .await
+        .map_err(|e| NotFound(e.to_string()))?;
+    
     let actor_id = target.actor_id();
 
     let following = sqlx::query!(
@@ -70,14 +76,14 @@ pub async fn following(mut db: Connection<Db>, uuid: &str) -> Json<OrderedCollec
     .await
     .unwrap();
 
-    Json(OrderedCollection {
+    Ok(Json(OrderedCollection {
         ty: "OrderedCollection".to_string(),
         total_items: 1,
         ordered_items: following
             .into_iter()
             .map(|f| f.followed_id)
             .collect::<Vec<_>>(),
-    })
+    }))
 }
 
 #[get("/users/<uuid>/posts/<post>")]
@@ -111,14 +117,17 @@ pub async fn post(
 }
 
 #[get("/users/<uuid>")]
-pub async fn user(mut db: Connection<Db>, uuid: &str) -> (ContentType, Json<Person>) {
-    let user = ap::User::from_id(uuid, &mut **db).await;
-    (
+pub async fn user(mut db: Connection<Db>, uuid: &str) -> Result<(ContentType, Json<Person>), NotFound<String>> {
+    let user = ap::User::from_id(uuid, &mut **db)
+        .await
+        .map_err(|e| NotFound(e.to_string()))?;
+
+    Ok((
         activity_type(),
         Json(Person {
             context: "https://www.w3.org/ns/activitystreams".to_string(),
             ty: "Person".to_string(),
-            id: user.id().to_string(),
+            id: format!("https://ferri.amy.mov/users/{}", user.id()),
             name: user.username().to_string(),
             preferred_username: user.display_name().to_string(),
             followers: format!("https://ferri.amy.mov/users/{}/followers", uuid),
@@ -132,5 +141,5 @@ pub async fn user(mut db: Connection<Db>, uuid: &str) -> (ContentType, Json<Pers
                 public_key: include_str!("../../../public.pem").to_string(),
             }),
         }),
-    )
+    ))
 }

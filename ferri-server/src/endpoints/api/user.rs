@@ -5,6 +5,7 @@ use rocket::{
 };
 use rocket_db_pools::Connection;
 use uuid::Uuid;
+use rocket::response::status::NotFound;
 
 use crate::timeline::{TimelineAccount, TimelineStatus};
 use crate::{AuthenticatedUser, Db, http::HttpClient};
@@ -62,9 +63,12 @@ pub async fn new_follow(
     http: &State<HttpClient>,
     uuid: &str,
     user: AuthenticatedUser,
-) {
+) -> Result<(), NotFound<String>> {
     let follower = ap::User::from_actor_id(&user.actor_id, &mut **db).await;
-    let followed = ap::User::from_id(uuid, &mut **db).await;
+    
+    let followed = ap::User::from_id(uuid, &mut **db)
+        .await
+        .map_err(|e| NotFound(e.to_string()))?;
 
     let outbox = ap::Outbox::for_user(follower.clone(), http.inner());
 
@@ -83,6 +87,8 @@ pub async fn new_follow(
 
     req.save(&mut **db).await;
     outbox.post(req).await;
+    
+    Ok(())
 }
 
 #[get("/accounts/<uuid>")]
@@ -90,10 +96,12 @@ pub async fn account(
     mut db: Connection<Db>,
     uuid: &str,
     user: AuthenticatedUser,
-) -> Json<TimelineAccount> {
-    let user = ap::User::from_id(uuid, &mut **db).await;
+) -> Result<Json<TimelineAccount>, NotFound<String>> {
+    let user = ap::User::from_id(uuid, &mut **db)
+        .await
+        .map_err(|e| NotFound(e.to_string()))?;
     let user_uri = format!("https://ferri.amy.mov/users/{}", user.username());
-    Json(CredentialAcount {
+    Ok(Json(CredentialAcount {
         id: user.id().to_string(),
         username: user.username().to_string(),
         acct: user.username().to_string(),
@@ -112,7 +120,7 @@ pub async fn account(
         following_count: 1,
         statuses_count: 1,
         last_status_at: "2025-04-10T22:14:34Z".to_string(),
-    })
+    }))
 }
 
 #[get("/accounts/<uuid>/statuses?<limit>")]
@@ -121,8 +129,10 @@ pub async fn statuses(
     uuid: &str,
     limit: Option<i64>,
     user: AuthenticatedUser,
-) -> Json<Vec<TimelineStatus>> {
-    let user = ap::User::from_id(uuid, &mut **db).await;
+) -> Result<Json<Vec<TimelineStatus>>, NotFound<String>> {
+    let user = ap::User::from_id(uuid, &mut **db)
+        .await
+        .map_err(|e| NotFound(e.to_string()))?;
 
     let uid = user.id();
     let posts = sqlx::query!(
@@ -181,5 +191,5 @@ pub async fn statuses(
         });
     }
 
-    Json(out)
+    Ok(Json(out))
 }

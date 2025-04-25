@@ -1,8 +1,9 @@
 use crate::ap::{Actor, User, http};
-use chrono::{DateTime, Local};
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::Sqlite;
 use std::fmt::Debug;
+use tracing::{event, Level};
 
 #[derive(Debug, Clone)]
 pub enum ActivityType {
@@ -28,7 +29,7 @@ pub struct Activity<T: Serialize + Debug> {
     pub id: String,
     pub ty: ActivityType,
     pub object: T,
-    pub published: DateTime<Local>,
+    pub published: DateTime<Utc>,
     pub to: Vec<String>,
     pub cc: Vec<String>,
 }
@@ -39,7 +40,7 @@ impl<T: Serialize + Debug + Default> Default for Activity<T> {
             id: Default::default(),
             ty: ActivityType::Unknown,
             object: Default::default(),
-            published: Local::now(),
+            published: Utc::now(),
             to: Default::default(),
             cc: Default::default(),
         }
@@ -102,19 +103,18 @@ impl<'a> Outbox<'a> {
     }
 
     pub async fn post<T: Serialize + Debug>(&self, activity: OutgoingActivity<T>) {
-        dbg!(&activity);
+        event!(Level::INFO, ?activity, "activity in outbox");
+        
         let raw = RawActivity {
             context: "https://www.w3.org/ns/activitystreams".to_string(),
-            id: activity.req.id,
+            id: activity.req.id.clone(),
             ty: activity.req.ty.to_raw(),
             actor: self.user.actor().id().to_string(),
             object: activity.req.object,
             published: activity.req.published.to_rfc3339(),
         };
 
-        dbg!(&raw);
-
-        let follow_res = self
+        let outbox_res = self
             .transport
             .post(activity.to.inbox())
             .activity()
@@ -127,7 +127,10 @@ impl<'a> Outbox<'a> {
             .await
             .unwrap();
 
-        dbg!(follow_res);
+        event!(Level::DEBUG,
+               outbox_res, activity = activity.req.id,
+               "got response for outbox dispatch"
+        );
     }
 
     pub fn for_user(user: User, transport: &'a OutboxTransport) -> Outbox<'a> {

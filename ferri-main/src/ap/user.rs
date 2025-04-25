@@ -1,5 +1,6 @@
 use sqlx::Sqlite;
 use std::fmt::Debug;
+use thiserror::Error;
 
 #[derive(Debug, Clone)]
 pub struct Actor {
@@ -20,6 +21,10 @@ impl Actor {
     pub fn inbox(&self) -> &str {
         &self.inbox
     }
+
+    pub fn outbox(&self) -> &str {
+        &self.outbox
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -28,6 +33,13 @@ pub struct User {
     username: String,
     actor: Actor,
     display_name: String,
+}
+
+
+#[derive(Error, Debug)]
+pub enum UserError {
+    #[error("user `{0}` not found")]
+    NotFound(String),
 }
 
 impl User {
@@ -55,7 +67,7 @@ impl User {
         format!("https://ferri.amy.mov/users/{}", self.id())
     }
 
-    pub async fn from_id(uuid: &str, conn: impl sqlx::Executor<'_, Database = Sqlite>) -> User {
+    pub async fn from_id(uuid: &str, conn: impl sqlx::Executor<'_, Database = Sqlite>) -> Result<User, UserError> {
         let user = sqlx::query!(
             r#"
                 SELECT u.*, a.id as "actor_own_id", a.inbox, a.outbox
@@ -65,10 +77,11 @@ impl User {
             "#,
             uuid
         )
-        .fetch_one(conn)
-        .await
-        .unwrap();
-        User {
+            .fetch_one(conn)
+            .await
+            .map_err(|_| UserError::NotFound(uuid.to_string()))?;
+        
+        Ok(User {
             id: user.id,
             username: user.username,
             actor: Actor {
@@ -77,7 +90,7 @@ impl User {
                 outbox: user.outbox,
             },
             display_name: user.display_name,
-        }
+        })
     }
 
     pub async fn from_username(

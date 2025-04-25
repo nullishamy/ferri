@@ -12,7 +12,7 @@ pub use user::*;
 mod post;
 pub use post::*;
 
-pub const AS_CONTEXT: &'static str = "https://www.w3.org/ns/activitystreams";
+pub const AS_CONTEXT: &str = "https://www.w3.org/ns/activitystreams";
 
 pub fn new_id() -> String {
     Uuid::new_v4().to_string()
