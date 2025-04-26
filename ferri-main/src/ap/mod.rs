@@ -12,6 +12,9 @@ pub use user::*;
 mod post;
 pub use post::*;
 
+mod request_queue;
+pub use request_queue::*;
+
 pub const AS_CONTEXT: &str = "https://www.w3.org/ns/activitystreams";
 
 pub fn new_id() -> String {

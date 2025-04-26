@@ -6,6 +6,8 @@ use endpoints::{
 use tracing::Level;
 use tracing_subscriber::fmt;
 
+use main::ap;
+
 use main::ap::http;
 use main::config::Config;
 use rocket::{
@@ -88,7 +90,8 @@ impl<'a> FromRequest<'a> for AuthenticatedUser {
     }
 }
 
-
+pub struct OutboundQueue(pub ap::QueueHandle);
+pub struct InboundQueue(pub ap::QueueHandle);
 
 pub fn launch(cfg: Config) -> Rocket<Build> {
     let format = fmt::format()
@@ -104,11 +107,19 @@ pub fn launch(cfg: Config) -> Rocket<Build> {
         .event_format(format)
         .with_writer(std::io::stdout)
         .init();
-    
+
+    let outbound = ap::RequestQueue::new("outbound");
+    let outbound_handle = outbound.spawn();
+
+    let inbound = ap::RequestQueue::new("inbound");
+    let inbound_handle = inbound.spawn();
+
     let http_client = http::HttpClient::new();
     build()
         .manage(cfg)
         .manage(http_client)
+        .manage(OutboundQueue(outbound_handle))
+        .manage(InboundQueue(inbound_handle))
         .attach(Db::init())
         .attach(cors::CORS)
         .mount("/assets", rocket::fs::FileServer::from("./assets"))

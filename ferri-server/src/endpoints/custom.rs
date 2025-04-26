@@ -1,6 +1,8 @@
 use main::ap::http::HttpClient;
 use rocket::{State, get, response::status};
 use rocket_db_pools::Connection;
+use main::ap;
+use crate::OutboundQueue;
 
 use uuid::Uuid;
 
@@ -84,7 +86,9 @@ pub async fn resolve_user(acct: &str, host: &str) -> types::Person {
 }
 
 #[get("/test")]
-pub async fn test(http: &State<HttpClient>) -> &'static str {
+pub async fn test(http: &State<HttpClient>, outbound: &State<OutboundQueue>) -> &'static str {
+    outbound.0.send(ap::QueueMessage::Heartbeat);
+    
     let user = resolve_user("amy@fedi.amy.mov", "fedi.amy.mov").await;
 
     let post = activity::CreateActivity {
