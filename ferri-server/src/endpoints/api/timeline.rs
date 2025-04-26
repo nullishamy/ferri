@@ -1,5 +1,6 @@
-use crate::{AuthenticatedUser, Db, endpoints::api::user::CredentialAcount};
+use crate::{AuthenticatedUser, Db, endpoints::api::user::CredentialAcount, Config};
 use rocket::{
+    State,
     get,
     serde::{Deserialize, Serialize, json::Json},
 };
@@ -32,11 +33,12 @@ pub struct TimelineStatus {
     pub account: TimelineAccount,
 }
 
-#[get("/timelines/home?<limit>")]
+#[get("/timelines/home?<_limit>")]
 pub async fn home(
     mut db: Connection<Db>,
-    limit: i64,
-    user: AuthenticatedUser,
+    config: &State<Config>,
+    _limit: i64,
+    _user: AuthenticatedUser,
 ) -> Json<Vec<TimelineStatus>> {
     let posts = sqlx::query!(
         r#"
@@ -66,7 +68,7 @@ pub async fn home(
                 .await
                 .unwrap();
             
-            let user_uri = format!("https://ferri.amy.mov/users/{}", record.user_id);
+            let user_uri = config.user_url(&record.user_id);
             boost = Some(Box::new(TimelineStatus {
                 id: record.post_id.clone(),
                 created_at: record.created_at.clone(),
@@ -110,7 +112,7 @@ pub async fn home(
             }))
         }
         
-        let user_uri = format!("https://ferri.amy.mov/users/{}", record.username);
+        let user_uri = config.user_web_url(&record.username);
         out.push(TimelineStatus {
             id: record.post_id.clone(),
             created_at: record.created_at.clone(),

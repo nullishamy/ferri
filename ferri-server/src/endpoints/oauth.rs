@@ -8,12 +8,12 @@ use rocket::{
 };
 use rocket_db_pools::Connection;
 
-#[get("/oauth/authorize?<client_id>&<scope>&<redirect_uri>&<response_type>")]
+#[get("/oauth/authorize?<client_id>&<scope>&<redirect_uri>&<_response_type>")]
 pub async fn authorize(
     client_id: &str,
     scope: &str,
     redirect_uri: &str,
-    response_type: &str,
+    _response_type: &str,
     mut db: Connection<Db>,
 ) -> Redirect {
     // For now, we will always authorize the request and assign it to an admin user
@@ -68,11 +68,11 @@ pub struct Token {
 #[derive(Deserialize, Debug, FromForm)]
 #[serde(crate = "rocket::serde")]
 pub struct NewTokenRequest {
-    client_id: String,
-    redirect_uri: String,
-    grant_type: String,
-    code: String,
-    client_secret: String,
+    // pub client_id: String,
+    // pub redirect_uri: String,
+    // pub grant_type: String,
+    pub code: String,
+    // pub client_secret: String,
 }
 
 #[post("/oauth/token", data = "<req>")]

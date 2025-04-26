@@ -1,17 +1,18 @@
 use main::ap;
-use rocket::{get, http::ContentType, serde::json::Json};
+use rocket::{get, http::ContentType, serde::json::Json, State};
 use rocket_db_pools::Connection;
 use rocket::response::status::NotFound;
 
 use crate::{
+    Config,
     Db,
     types::{OrderedCollection, Person, UserKey, content},
 };
 
 use super::activity_type;
 
-#[get("/users/<user>/inbox")]
-pub async fn inbox(user: String) -> Json<OrderedCollection> {
+#[get("/users/<_user>/inbox")]
+pub async fn inbox(_user: String) -> Json<OrderedCollection> {
     Json(OrderedCollection {
         ty: "OrderedCollection".to_string(),
         total_items: 0,
@@ -19,8 +20,8 @@ pub async fn inbox(user: String) -> Json<OrderedCollection> {
     })
 }
 
-#[get("/users/<user>/outbox")]
-pub async fn outbox(user: String) -> Json<OrderedCollection> {
+#[get("/users/<_user>/outbox")]
+pub async fn outbox(_user: String) -> Json<OrderedCollection> {
     Json(OrderedCollection {
         ty: "OrderedCollection".to_string(),
         total_items: 0,
@@ -89,6 +90,7 @@ pub async fn following(mut db: Connection<Db>, uuid: &str) -> Result<Json<Ordere
 #[get("/users/<uuid>/posts/<post>")]
 pub async fn post(
     mut db: Connection<Db>,
+    config: &State<Config>,
     uuid: &str,
     post: String,
 ) -> (ContentType, Json<content::Post>) {
@@ -106,19 +108,23 @@ pub async fn post(
         activity_type(),
         Json(content::Post {
             context: "https://www.w3.org/ns/activitystreams".to_string(),
-            id: format!("https://ferri.amy.mov/users/{}/posts/{}", uuid, post.id),
-            attributed_to: Some(format!("https://ferri.amy.mov/users/{}/posts/{}", uuid, post.id)),
+            id: config.post_url(uuid, &post.id),
+            attributed_to: Some(config.user_url(uuid)),
             ty: "Note".to_string(),
             content: post.content,
             ts: post.created_at,
-            to: vec!["https://ferri.amy.mov/users/amy/followers".to_string()],
+            to: vec![config.followers_url(uuid)],
             cc: vec!["https://www.w3.org/ns/activitystreams#Public".to_string()],
         }),
     )
 }
 
 #[get("/users/<uuid>")]
-pub async fn user(mut db: Connection<Db>, uuid: &str) -> Result<(ContentType, Json<Person>), NotFound<String>> {
+pub async fn user(
+    mut db: Connection<Db>,
+    config: &State<Config>,
+    uuid: &str
+) -> Result<(ContentType, Json<Person>), NotFound<String>> {
     let user = ap::User::from_id(uuid, &mut **db)
         .await
         .map_err(|e| NotFound(e.to_string()))?;
@@ -128,17 +134,17 @@ pub async fn user(mut db: Connection<Db>, uuid: &str) -> Result<(ContentType, Js
         Json(Person {
             context: "https://www.w3.org/ns/activitystreams".to_string(),
             ty: "Person".to_string(),
-            id: format!("https://ferri.amy.mov/users/{}", user.id()),
+            id: config.user_url(user.id()),
             name: user.username().to_string(),
             preferred_username: user.display_name().to_string(),
-            followers: format!("https://ferri.amy.mov/users/{}/followers", uuid),
-            following: format!("https://ferri.amy.mov/users/{}/following", uuid),
+            followers: config.followers_url(user.id()),
+            following: config.following_url(user.id()),
             summary: format!("ferri {}", user.username()),
-            inbox: format!("https://ferri.amy.mov/users/{}/inbox", uuid),
-            outbox: format!("https://ferri.amy.mov/users/{}/outbox", uuid),
+            inbox: config.inbox_url(user.id()),
+            outbox: config.outbox_url(user.id()),
             public_key: Some(UserKey {
                 id: format!("https://ferri.amy.mov/users/{}#main-key", uuid),
-                owner: format!("https://ferri.amy.mov/users/{}", uuid),
+                owner: config.user_url(user.id()),
                 public_key: include_str!("../../../public.pem").to_string(),
             }),
         }),

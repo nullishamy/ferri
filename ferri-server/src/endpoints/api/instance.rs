@@ -1,4 +1,6 @@
-use rocket::{get, serde::json::Json};
+use rocket::{get, serde::json::Json, State};
+
+use crate::Config;
 
 use crate::types::instance::{
     Accounts, Configuration, Contact, Instance, MediaAttachments, Polls, Registrations, Statuses,
@@ -6,9 +8,9 @@ use crate::types::instance::{
 };
 
 #[get("/instance")]
-pub async fn instance() -> Json<Instance> {
+pub async fn instance(config: &State<Config>) -> Json<Instance> {
     Json(Instance {
-        domain: "ferri.amy.mov".to_string(),
+        domain: config.host().to_string(),
         title: "Ferri".to_string(),
         version: "0.0.1".to_string(),
         source_url: "https://forge.amy.mov/amy/ferri".to_string(),

@@ -1,9 +1,10 @@
 use main::ap;
-use rocket::{get, serde::json::Json};
+use rocket::{get, serde::json::Json, State};
 use rocket_db_pools::Connection;
 use tracing::info;
 
 use crate::{
+    Config,
     Db,
     types::webfinger::{Link, WebfingerResponse},
 };
@@ -20,7 +21,7 @@ pub async fn host_meta() -> &'static str {
 
 // https://mastodon.social/.well-known/webfinger?resource=acct:gargron@mastodon.social
 #[get("/.well-known/webfinger?<resource>")]
-pub async fn webfinger(mut db: Connection<Db>, resource: &str) -> Json<WebfingerResponse> {
+pub async fn webfinger(mut db: Connection<Db>, config: &State<Config>, resource: &str) -> Json<WebfingerResponse> {
     info!(?resource, "incoming webfinger request");
 
     let acct = resource.strip_prefix("acct:").unwrap();
@@ -30,19 +31,19 @@ pub async fn webfinger(mut db: Connection<Db>, resource: &str) -> Json<Webfinger
     Json(WebfingerResponse {
         subject: resource.to_string(),
         aliases: vec![
-            format!("https://ferri.amy.mov/users/{}", user.id()),
-            format!("https://ferri.amy.mov/{}", user.username()),
+            config.user_url(user.id()),
+            config.user_web_url(user.username())
         ],
         links: vec![
             Link {
                 rel: "http://webfinger.net/rel/profile-page".to_string(),
                 ty: Some("text/html".to_string()),
-                href: Some(format!("https://ferri.amy.mov/{}", user.username())),
+                href: Some(config.user_web_url(user.username())),
             },
             Link {
                 rel: "self".to_string(),
                 ty: Some("application/activity+json".to_string()),
-                href: Some(format!("https://ferri.amy.mov/users/{}", user.id())),
+                href: Some(config.user_url(user.id())),
             },
         ],
     })

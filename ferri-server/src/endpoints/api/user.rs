@@ -95,7 +95,7 @@ pub async fn new_follow(
 pub async fn account(
     mut db: Connection<Db>,
     uuid: &str,
-    user: AuthenticatedUser,
+    _user: AuthenticatedUser,
 ) -> Result<Json<TimelineAccount>, NotFound<String>> {
     let user = ap::User::from_id(uuid, &mut **db)
         .await
@@ -123,12 +123,12 @@ pub async fn account(
     }))
 }
 
-#[get("/accounts/<uuid>/statuses?<limit>")]
+#[get("/accounts/<uuid>/statuses?<_limit>")]
 pub async fn statuses(
     mut db: Connection<Db>,
     uuid: &str,
-    limit: Option<i64>,
-    user: AuthenticatedUser,
+    _limit: Option<i64>,
+    _user: AuthenticatedUser,
 ) -> Result<Json<Vec<TimelineStatus>>, NotFound<String>> {
     let user = ap::User::from_id(uuid, &mut **db)
         .await

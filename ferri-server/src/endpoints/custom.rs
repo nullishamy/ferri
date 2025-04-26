@@ -123,5 +123,7 @@ pub async fn test(http: &State<HttpClient>, outbound: &State<OutboundQueue>) -> 
         .await
         .unwrap();
 
+    dbg!(follow);
+
     "Hello, world!"
 }

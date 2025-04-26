@@ -1,6 +1,6 @@
 use std::sync::mpsc;
 use std::thread;
-use tracing::{debug, info, span, Level};
+use tracing::{info, span, Level};
 
 #[derive(Debug)]
 pub enum QueueMessage {

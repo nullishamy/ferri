@@ -26,11 +26,11 @@ pub struct StatusContext {
     descendants: Vec<Status>
 }
 
-#[get("/statuses/<status>/context")]
+#[get("/statuses/<_status>/context")]
 pub async fn status_context(
-    status: &str,
-    user: AuthenticatedUser,
-    mut db: Connection<Db>
+    _status: &str,
+    _user: AuthenticatedUser,
+    _db: Connection<Db>
 ) -> Json<StatusContext> {
     Json(StatusContext {
         ancestors: vec![],

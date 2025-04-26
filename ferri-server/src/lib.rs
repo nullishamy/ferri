@@ -3,7 +3,6 @@ use endpoints::{
     custom, inbox, oauth, user, well_known,
 };
 
-use tracing::Level;
 use tracing_subscriber::fmt;
 
 use main::ap;
@@ -27,17 +26,17 @@ mod types;
 pub struct Db(sqlx::SqlitePool);
 
 #[get("/")]
-async fn user_profile(cfg: &rocket::State<Config>) -> (ContentType, &'static str) {
+async fn user_profile() -> (ContentType, &'static str) {
     (ContentType::HTML, "<p>hello</p>")
 }
 
-#[get("/activities/<activity>")]
-async fn activity_endpoint(activity: String) {
+#[get("/activities/<_activity>")]
+async fn activity_endpoint(_activity: String) {
 
 }
 
 #[derive(Debug)]
-struct AuthenticatedUser {
+pub struct AuthenticatedUser {
     pub username: String,
     pub id: String,
     pub token: String,
@@ -45,10 +44,7 @@ struct AuthenticatedUser {
 }
 
 #[derive(Debug)]
-enum LoginError {
-    InvalidData,
-    UsernameDoesNotExist,
-    WrongPassword,
+pub enum LoginError {
 }
 
 #[rocket::async_trait]
