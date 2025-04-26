@@ -99,6 +99,7 @@ pub async fn test(http: &State<HttpClient>) -> &'static str {
             ts: "2025-04-10T10:48:11Z".to_string(),
             to: vec!["https://ferri.amy.mov/users/amy/followers".to_string()],
             cc: vec!["https://www.w3.org/ns/activitystreams#Public".to_string()],
+            attributed_to: None
         },
         ts: "2025-04-10T10:48:11Z".to_string(),
         to: vec!["https://ferri.amy.mov/users/amy/followers".to_string()],

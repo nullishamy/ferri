@@ -111,6 +111,7 @@ async fn create_status(
         favourites_count: 0,
         favourited: false,
         reblogged: false,
+        reblog: None,
         muted: false,
         bookmarked: false,
         media_attachments: vec![],

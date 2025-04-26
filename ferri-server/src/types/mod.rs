@@ -34,6 +34,7 @@ pub struct Person {
     pub inbox: String,
     pub outbox: String,
     pub preferred_username: String,
+    #[serde(default)]
     pub name: String,
     pub public_key: Option<UserKey>,
 }

@@ -1,5 +1,4 @@
 use rocket::serde::{Deserialize, Serialize};
-
 use crate::types::content::Post;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -59,4 +58,18 @@ pub struct AcceptActivity {
 
     pub object: String,
     pub actor: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(crate = "rocket::serde")]
+pub struct BoostActivity {
+    #[serde(rename = "type")]
+    pub ty: String,
+
+    pub id: String,
+    pub actor: String,
+    pub published: String,
+    pub to: Vec<String>,
+    pub cc: Vec<String>,
+    pub object: String,
 }

@@ -27,6 +27,7 @@ pub struct TimelineStatus {
     pub reblogged: bool,
     pub muted: bool,
     pub bookmarked: bool,
+    pub reblog: Option<Box<TimelineStatus>>,
     pub media_attachments: Vec<()>,
     pub account: TimelineAccount,
 }
@@ -40,7 +41,7 @@ pub async fn home(
     let posts = sqlx::query!(
         r#"
             SELECT p.id as "post_id", u.id as "user_id", p.content, p.uri as "post_uri", 
-                u.username, u.display_name, u.actor_id, p.created_at 
+                u.username, u.display_name, u.actor_id, p.created_at, p.boosted_post_id
             FROM post p
             INNER JOIN user u on p.user_id = u.id
         "#
@@ -51,6 +52,64 @@ pub async fn home(
 
     let mut out = Vec::<TimelineStatus>::new();
     for record in posts {
+        let mut boost: Option<Box<TimelineStatus>> = None;
+        if let Some(boosted_id) = record.boosted_post_id {
+            let record = sqlx::query!(
+               r#"
+                 SELECT p.id as "post_id", u.id as "user_id", p.content, p.uri as "post_uri", 
+                   u.username, u.display_name, u.actor_id, p.created_at, p.boosted_post_id
+                 FROM post p
+                 INNER JOIN user u on p.user_id = u.id
+                 WHERE p.id = ?1
+               "#, boosted_id)
+                .fetch_one(&mut **db)
+                .await
+                .unwrap();
+            
+            let user_uri = format!("https://ferri.amy.mov/users/{}", record.user_id);
+            boost = Some(Box::new(TimelineStatus {
+                id: record.post_id.clone(),
+                created_at: record.created_at.clone(),
+                in_reply_to_id: None,
+                in_reply_to_account_id: None,
+                content: record.content.clone(),
+                visibility: "public".to_string(),
+                spoiler_text: "".to_string(),
+                sensitive: false,
+                uri: record.post_uri.clone(),
+                url: record.post_uri.clone(),
+                replies_count: 0,
+                reblogs_count: 0,
+                favourites_count: 0,
+                favourited: false,
+                reblogged: false,
+                reblog: boost,
+                muted: false,
+                bookmarked: false,
+                media_attachments: vec![],
+                account: CredentialAcount {
+                    id: record.user_id.clone(),
+                    username: record.username.clone(),
+                    acct: record.username.clone(),
+                    display_name: record.display_name.clone(),
+                    locked: false,
+                    bot: false,
+                    created_at: "2025-04-10T22:12:09Z".to_string(),
+                    attribution_domains: vec![],
+                    note: "".to_string(),
+                    url: user_uri,
+                    avatar: "https://ferri.amy.mov/assets/pfp.png".to_string(),
+                    avatar_static: "https://ferri.amy.mov/assets/pfp.png".to_string(),
+                    header: "https://ferri.amy.mov/assets/pfp.png".to_string(),
+                    header_static: "https://ferri.amy.mov/assets/pfp.png".to_string(),
+                    followers_count: 1,
+                    following_count: 1,
+                    statuses_count: 1,
+                    last_status_at: "2025-04-10T22:14:34Z".to_string(),
+                },                
+            }))
+        }
+        
         let user_uri = format!("https://ferri.amy.mov/users/{}", record.username);
         out.push(TimelineStatus {
             id: record.post_id.clone(),
@@ -68,6 +127,7 @@ pub async fn home(
             favourites_count: 0,
             favourited: false,
             reblogged: false,
+            reblog: boost,
             muted: false,
             bookmarked: false,
             media_attachments: vec![],

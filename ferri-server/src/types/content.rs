@@ -15,4 +15,7 @@ pub struct Post {
     pub content: String,
     pub to: Vec<String>,
     pub cc: Vec<String>,
+    
+    #[serde(rename = "attributedTo")]
+    pub attributed_to: Option<String>
 }

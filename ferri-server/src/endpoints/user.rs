@@ -107,6 +107,7 @@ pub async fn post(
         Json(content::Post {
             context: "https://www.w3.org/ns/activitystreams".to_string(),
             id: format!("https://ferri.amy.mov/users/{}/posts/{}", uuid, post.id),
+            attributed_to: Some(format!("https://ferri.amy.mov/users/{}/posts/{}", uuid, post.id)),
             ty: "Note".to_string(),
             content: post.content,
             ts: post.created_at,

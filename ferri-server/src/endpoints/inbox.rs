@@ -11,7 +11,7 @@ use tracing::{event, span, Level, debug, warn, info};
 use crate::{
     Db,
     http::HttpClient,
-    types::{Person, activity},
+    types::{Person, content::Post, activity},
 };
 
 fn handle_delete_activity(activity: activity::DeleteActivity) {
@@ -142,6 +142,92 @@ async fn handle_like_activity(activity: activity::LikeActivity, mut db: Connecti
     }
 }
 
+async fn handle_boost_activity(
+    activity: activity::BoostActivity,
+    http: &HttpClient,
+    mut db: Connection<Db>,
+) {
+    let key_id = "https://ferri.amy.mov/users/amy#main-key";
+    dbg!(&activity);
+    let post = http
+        .get(&activity.object)
+        .activity()
+        .sign(&key_id)
+        .send()
+        .await
+        .unwrap()
+        .json::<Post>()
+        .await
+        .unwrap();
+
+    dbg!(&post);
+    let attribution = post.attributed_to.unwrap();
+    let post_user = http
+        .get(&attribution)
+        .activity()
+        .sign(&key_id)
+        .send()
+        .await
+        .unwrap()
+        .json::<Person>()
+        .await
+        .unwrap();
+
+    let user = http
+        .get(&activity.actor)
+        .activity()
+        .sign(&key_id)
+        .send()
+        .await
+        .unwrap()
+        .json::<Person>()
+        .await
+        .unwrap();
+
+        dbg!(&post_user);
+
+    debug!("creating actor {}", activity.actor);
+    create_actor(&user, &activity.actor, &mut **db).await;
+
+    debug!("creating user {}", activity.actor);
+    create_user(&user, &activity.actor, &mut **db).await;
+
+    debug!("creating actor {}", attribution);
+    create_actor(&post_user, &attribution, &mut **db).await;
+
+    debug!("creating user {}", attribution);
+    create_user(&post_user, &attribution, &mut **db).await;
+    
+    let attributed_user = ap::User::from_actor_id(&attribution, &mut **db).await;
+    let actor_user = ap::User::from_actor_id(&activity.actor, &mut **db).await;
+    
+    let base_id = ap::new_id();
+    let now = ap::new_ts();
+    
+    let reblog_id = ap::new_id();
+
+    let attr_id = attributed_user.id();
+    sqlx::query!("
+       INSERT INTO post (id, uri, user_id, content, created_at)
+       VALUES (?1, ?2, ?3, ?4, ?5)
+    ", reblog_id, post.id, attr_id, post.content, post.ts)
+        .execute(&mut **db)
+        .await
+        .unwrap();
+
+    let uri = format!("https://ferri.amy.mov/users/{}/posts/{}", actor_user.id(), post.id);
+    let user_id = actor_user.id();
+    
+    sqlx::query!("
+       INSERT INTO post (id, uri, user_id, content, created_at, boosted_post_id)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+    ", base_id, uri, user_id, "", now, reblog_id)
+        .execute(&mut **db)
+        .await
+        .unwrap();
+
+}
+
 async fn handle_create_activity(
     activity: activity::CreateActivity,
     http: &HttpClient,
@@ -218,6 +304,11 @@ pub async fn inbox(db: Connection<Db>, http: &State<HttpClient>, user: &str, bod
             let activity = serde_json::from_str::<activity::LikeActivity>(&body).unwrap();
             handle_like_activity(activity, db).await;
         }
+        "Announce" => {
+            let activity = serde_json::from_str::<activity::BoostActivity>(&body).unwrap();
+            handle_boost_activity(activity, http.inner(), db).await;
+        }
+         
         act => {
             warn!(act, body, "unknown activity");
         }
