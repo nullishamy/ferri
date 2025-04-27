@@ -1,5 +1,7 @@
 pub mod ap;
 pub mod config;
+mod types_rewrite;
+
 use rand::{Rng, distributions::Alphanumeric};
 
 pub fn gen_token(len: usize) -> String {

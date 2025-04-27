@@ -56,44 +56,37 @@ async fn create_status(
 
     post.save(&mut **db).await;
 
-    let actors = sqlx::query!("SELECT * FROM actor")
-        .fetch_all(&mut **db)
+    let actor = sqlx::query!("SELECT * FROM actor WHERE id = ?1", "https://fedi.amy.mov/users/9zkygethkdw60001")
+        .fetch_one(&mut **db)
         .await
         .unwrap();
 
-    for record in actors {
-        // Don't send to ourselves
-        if record.id == user.actor_id() {
-            continue;
-        }
+    let create_id = format!("https://ferri.amy.mov/activities/{}", Uuid::new_v4());
 
-        let create_id = format!("https://ferri.amy.mov/activities/{}", Uuid::new_v4());
+    let activity = ap::Activity {
+        id: create_id,
+        ty: ap::ActivityType::Create,
+        object: post.clone().to_ap(),
+        to: vec![format!("{}/followers", user.uri())],
+        published: now,
+        cc: vec!["https://www.w3.org/ns/activitystreams#Public".to_string()],
+        ..Default::default()
+    };
 
-        let activity = ap::Activity {
-            id: create_id,
-            ty: ap::ActivityType::Create,
-            object: post.clone().to_ap(),
-            to: vec![format!("{}/followers", user.uri())],
-            published: now,
-            cc: vec!["https://www.w3.org/ns/activitystreams#Public".to_string()],
-            ..Default::default()
-        };
+    let actor = ap::Actor::from_raw(
+        actor.id.clone(),
+        actor.inbox.clone(),
+        actor.outbox.clone(),
+    );
 
-        let actor = ap::Actor::from_raw(
-            record.id.clone(),
-            record.inbox.clone(),
-            record.outbox.clone(),
-        );
+    let req = ap::OutgoingActivity {
+        req: activity,
+        signed_by: format!("{}#main-key", user.uri()),
+        to: actor,
+    };
 
-        let req = ap::OutgoingActivity {
-            req: activity,
-            signed_by: format!("{}#main-key", user.uri()),
-            to: actor,
-        };
-
-        req.save(&mut **db).await;
-        outbox.post(req).await;
-    }
+    req.save(&mut **db).await;
+    outbox.post(req).await;
 
     TimelineStatus {
         id: post.id().to_string(),

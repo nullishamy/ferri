@@ -1,6 +1,7 @@
 use main::ap;
-use rocket::{get, http::ContentType, serde::json::Json, State};
+use rocket::{get, http::ContentType, serde::json::Json, State, Responder};
 use rocket_db_pools::Connection;
+use rocket::response::Redirect;
 use rocket::response::status::NotFound;
 
 use crate::{
@@ -119,34 +120,56 @@ pub async fn post(
     )
 }
 
+#[derive(Debug, Responder)]
+pub enum UserFetchError {
+    NotFound(NotFound<String>),
+    Moved(Redirect),
+}
+
+type ActivityResponse<T> = (ContentType, T);
+fn ap_response<T>(t: T) -> ActivityResponse<T> {
+    (activity_type(), t)
+}
+
+fn ap_ok<T, E>(t: T) -> Result<ActivityResponse<T>, E> {
+    Ok(ap_response(t))
+}
+
 #[get("/users/<uuid>")]
 pub async fn user(
     mut db: Connection<Db>,
     config: &State<Config>,
     uuid: &str
-) -> Result<(ContentType, Json<Person>), NotFound<String>> {
+) -> Result<ActivityResponse<Json<Person>>, UserFetchError> {
+    if uuid == "amy" {
+        return Err(
+            UserFetchError::Moved(
+                Redirect::permanent("https://ferri.amy.mov/users/9b9d497b-2731-435f-a929-e609ca69dac9")
+            )
+        )
+    }
+    
     let user = ap::User::from_id(uuid, &mut **db)
         .await
-        .map_err(|e| NotFound(e.to_string()))?;
+        .map_err(|e| UserFetchError::NotFound(NotFound(e.to_string())))?;
 
-    Ok((
-        activity_type(),
-        Json(Person {
-            context: "https://www.w3.org/ns/activitystreams".to_string(),
-            ty: "Person".to_string(),
-            id: config.user_url(user.id()),
-            name: user.username().to_string(),
-            preferred_username: user.display_name().to_string(),
-            followers: config.followers_url(user.id()),
-            following: config.following_url(user.id()),
-            summary: format!("ferri {}", user.username()),
-            inbox: config.inbox_url(user.id()),
-            outbox: config.outbox_url(user.id()),
-            public_key: Some(UserKey {
-                id: format!("https://ferri.amy.mov/users/{}#main-key", uuid),
-                owner: config.user_url(user.id()),
-                public_key: include_str!("../../../public.pem").to_string(),
-            }),
+    let person = Person {
+        context: "https://www.w3.org/ns/activitystreams".to_string(),
+        ty: "Person".to_string(),
+        id: config.user_url(user.id()),
+        name: user.username().to_string(),
+        preferred_username: user.display_name().to_string(),
+        followers: config.followers_url(user.id()),
+        following: config.following_url(user.id()),
+        summary: format!("ferri {}", user.username()),
+        inbox: config.inbox_url(user.id()),
+        outbox: config.outbox_url(user.id()),
+        public_key: Some(UserKey {
+            id: format!("https://ferri.amy.mov/users/{}#main-key", uuid),
+            owner: config.user_url(user.id()),
+            public_key: include_str!("../../../public.pem").to_string(),
         }),
-    ))
+    };
+    
+    ap_ok(Json(person))
 }

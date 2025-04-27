@@ -42,6 +42,9 @@ impl RequestQueue {
             let recv = self.recv;
             
             while let Ok(req) = recv.recv() {
+                // FIXME: When we make this do async things we will need to add tokio and
+                //        use proper async handled spans as the enter/drop won't work.
+                //        See inbox.rs for how we handle that.
                 let s = span!(Level::INFO, "queue", queue_name = self.name);
                 let _enter = s.enter();
                 

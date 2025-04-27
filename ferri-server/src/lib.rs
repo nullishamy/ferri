@@ -20,6 +20,7 @@ use rocket_db_pools::{Connection, Database, sqlx};
 mod cors;
 mod endpoints;
 mod types;
+mod http_wrapper;
 
 #[derive(Database)]
 #[database("sqlite_ferri")]

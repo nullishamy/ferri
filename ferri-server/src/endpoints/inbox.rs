@@ -1,4 +1,5 @@
 use chrono::Local;
+use tracing::Instrument;
 use main::ap;
 use rocket::serde::json::serde_json;
 use rocket::{State, post};
@@ -6,7 +7,8 @@ use rocket_db_pools::Connection;
 use sqlx::Sqlite;
 use url::Url;
 use uuid::Uuid;
-use tracing::{event, span, Level, debug, warn, info};
+use tracing::{event, span, Level, debug, warn, info, error};
+use crate::http_wrapper::HttpWrapper;
 
 use crate::{
     Db,
@@ -46,7 +48,9 @@ async fn create_user(
     // HACK: Allow us to formulate a `user@host` username by assuming the actor is on the same host as the user
     let url = Url::parse(&actor).unwrap();
     let host = url.host_str().unwrap();
-    let username = format!("{}@{}", user.name, host);
+    info!("creating user '{}'@'{}' ({:#?})", user.preferred_username, host, user);
+    
+    let username = format!("{}@{}", user.preferred_username, host);
 
     let uuid = Uuid::new_v4().to_string();
     sqlx::query!(
@@ -58,7 +62,7 @@ async fn create_user(
         uuid,
         username,
         actor,
-        user.preferred_username
+        user.name
     )
     .execute(conn)
     .await
@@ -84,29 +88,27 @@ async fn create_follow(
     .unwrap();
 }
 
-async fn handle_follow_activity(
+async fn handle_follow_activity<'a>(
     followed_account: &str,
     activity: activity::FollowActivity,
-    http: &HttpClient,
+    http: HttpWrapper<'a>,
     mut db: Connection<Db>,
 ) {
-    let user = http
-        .get(&activity.actor)
-        .activity()
-        .send()
-        .await
-        .unwrap()
-        .json::<Person>()
-        .await
-        .unwrap();
+    let user = http.get_person(&activity.actor).await;
+    if let Err(e) = user {
+        error!("could not load user {}: {}", activity.actor, e.to_string());
+        return
+    }
+    
+    let user = user.unwrap();
 
     create_actor(&user, &activity.actor, &mut **db).await;
     create_user(&user, &activity.actor, &mut **db).await;
     create_follow(&activity, &mut **db).await;
 
     let follower = ap::User::from_actor_id(&activity.actor, &mut **db).await;
-    let followed = ap::User::from_username(&followed_account, &mut **db).await;
-    let outbox = ap::Outbox::for_user(followed.clone(), http);
+    let followed = ap::User::from_id(&followed_account, &mut **db).await.unwrap();
+    let outbox = ap::Outbox::for_user(followed.clone(), http.client());
 
     let activity = ap::Activity {
         id: format!("https://ferri.amy.mov/activities/{}", Uuid::new_v4()),
@@ -142,49 +144,51 @@ async fn handle_like_activity(activity: activity::LikeActivity, mut db: Connecti
     }
 }
 
-async fn handle_boost_activity(
+async fn handle_boost_activity<'a>(
     activity: activity::BoostActivity,
-    http: &HttpClient,
+    http: HttpWrapper<'a>,
     mut db: Connection<Db>,
 ) {
     let key_id = "https://ferri.amy.mov/users/amy#main-key";
     dbg!(&activity);
     let post = http
+        .client()
         .get(&activity.object)
         .activity()
         .sign(&key_id)
         .send()
         .await
         .unwrap()
-        .json::<Post>()
+        .text()
         .await
         .unwrap();
+    
+    info!("{}", post);
+    
+    let post = serde_json::from_str::<Post>(&post);
+    if let Err(e) = post {
+        error!(?e, "when decoding post");
+        return
+    }
+    
+    let post = post.unwrap();
 
-    dbg!(&post);
+    info!("{:#?}", post);
     let attribution = post.attributed_to.unwrap();
-    let post_user = http
-        .get(&attribution)
-        .activity()
-        .sign(&key_id)
-        .send()
-        .await
-        .unwrap()
-        .json::<Person>()
-        .await
-        .unwrap();
+    
+    let post_user = http.get_person(&attribution).await;
+    if let Err(e) = post_user {
+        error!("could not load post_user {}: {}", attribution, e.to_string());
+        return
+    }
+    let post_user = post_user.unwrap();
 
-    let user = http
-        .get(&activity.actor)
-        .activity()
-        .sign(&key_id)
-        .send()
-        .await
-        .unwrap()
-        .json::<Person>()
-        .await
-        .unwrap();
-
-        dbg!(&post_user);
+    let user = http.get_person(&activity.actor).await;
+    if let Err(e) = user {
+        error!("could not load actor {}: {}", activity.actor, e.to_string());
+        return
+    }
+    let user = user.unwrap();
 
     debug!("creating actor {}", activity.actor);
     create_actor(&user, &activity.actor, &mut **db).await;
@@ -228,23 +232,21 @@ async fn handle_boost_activity(
 
 }
 
-async fn handle_create_activity(
+async fn handle_create_activity<'a>(
     activity: activity::CreateActivity,
-    http: &HttpClient,
+    http: HttpWrapper<'a>,
     mut db: Connection<Db>,
 ) {
     assert!(&activity.object.ty == "Note");
     debug!("resolving user {}", activity.actor);
     
-    let user = http
-        .get(&activity.actor)
-        .activity()
-        .send()
-        .await
-        .unwrap()
-        .json::<Person>()
-        .await
-        .unwrap();
+    let user = http.get_person(&activity.actor).await;
+    if let Err(e) = user {
+        error!("could not load user {}: {}", activity.actor, e.to_string());
+        return
+    }
+
+    let user = user.unwrap();
 
     debug!("creating actor {}", activity.actor);
     create_actor(&user, &activity.actor, &mut **db).await;
@@ -284,36 +286,42 @@ pub async fn inbox(db: Connection<Db>, http: &State<HttpClient>, user: &str, bod
     let min = serde_json::from_str::<activity::MinimalActivity>(&body).unwrap();
     let inbox_span = span!(Level::INFO, "inbox-post", user_id = user);
 
-    let _enter = inbox_span.enter();
-    event!(Level::INFO, ?min, "received an activity");
-    
-    match min.ty.as_str() {
-        "Delete" => {
-            let activity = serde_json::from_str::<activity::DeleteActivity>(&body).unwrap();
-            handle_delete_activity(activity);
+    async move {
+        event!(Level::INFO, ?min, "received an activity");
+        
+        let key_id = "https://ferri.amy.mov/users/amy#main-key";
+        let wrapper = HttpWrapper::new(http.inner(), key_id);
+        
+        match min.ty.as_str() {
+            "Delete" => {
+                let activity = serde_json::from_str::<activity::DeleteActivity>(&body).unwrap();
+                handle_delete_activity(activity);
+            }
+            "Follow" => {
+                let activity = serde_json::from_str::<activity::FollowActivity>(&body).unwrap();
+                handle_follow_activity(user, activity, wrapper, db).await;
+            }
+            "Create" => {
+                let activity = serde_json::from_str::<activity::CreateActivity>(&body).unwrap();
+                handle_create_activity(activity, wrapper, db).await;
+            }
+            "Like" => {
+                let activity = serde_json::from_str::<activity::LikeActivity>(&body).unwrap();
+                handle_like_activity(activity, db).await;
+            }
+            "Announce" => {
+                let activity = serde_json::from_str::<activity::BoostActivity>(&body).unwrap();
+                handle_boost_activity(activity, wrapper, db).await;
+            }
+            
+            act => {
+                warn!(act, body, "unknown activity");
+            }
         }
-        "Follow" => {
-            let activity = serde_json::from_str::<activity::FollowActivity>(&body).unwrap();
-            handle_follow_activity(user, activity, http.inner(), db).await;
-        }
-        "Create" => {
-            let activity = serde_json::from_str::<activity::CreateActivity>(&body).unwrap();
-            handle_create_activity(activity, http.inner(), db).await;
-        }
-        "Like" => {
-            let activity = serde_json::from_str::<activity::LikeActivity>(&body).unwrap();
-            handle_like_activity(activity, db).await;
-        }
-        "Announce" => {
-            let activity = serde_json::from_str::<activity::BoostActivity>(&body).unwrap();
-            handle_boost_activity(activity, http.inner(), db).await;
-        }
-         
-        act => {
-            warn!(act, body, "unknown activity");
-        }
-    }
 
-    debug!("body in inbox: {}", body);
-    drop(_enter)
+        debug!("body in inbox: {}", body);
+    }
+    // Allow the span to be used inside the async code
+    // https://docs.rs/tracing/latest/tracing/span/struct.EnteredSpan.html#deref-methods-Span
+    .instrument(inbox_span).await;
 }

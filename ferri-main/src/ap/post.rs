@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use serde::Serialize;
 use sqlx::Sqlite;
 
-const POST_TYPE: &str = "Post";
+const POST_TYPE: &str = "Note";
 
 #[derive(Clone)]
 pub struct Post {

@@ -33,11 +33,10 @@ pub struct TimelineStatus {
     pub account: TimelineAccount,
 }
 
-#[get("/timelines/home?<_limit>")]
+#[get("/timelines/home")]
 pub async fn home(
     mut db: Connection<Db>,
     config: &State<Config>,
-    _limit: i64,
     _user: AuthenticatedUser,
 ) -> Json<Vec<TimelineStatus>> {
     let posts = sqlx::query!(

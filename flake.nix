@@ -29,6 +29,7 @@
           
           packages = with pkgs; [
             sqlx-cli
+            cargo-nextest
             (rust-bin.stable.latest.default.override {
               extensions = [ "rust-src" "rust-analyzer" ];
               targets = [  ];

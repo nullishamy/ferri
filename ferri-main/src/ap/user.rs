@@ -106,9 +106,10 @@ impl User {
             "#,
             username
         )
-        .fetch_one(conn)
-        .await
-        .unwrap();
+            .fetch_one(conn)
+            .await
+            .unwrap();
+        
         User {
             id: user.id,
             username: user.username,
