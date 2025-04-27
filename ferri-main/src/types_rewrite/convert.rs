@@ -26,3 +26,36 @@ impl From<ap::Actor> for db::Actor {
         }
     }
 }
+
+impl From<db::User> for api::Account {
+    fn from(val: db::User) -> api::Account {
+        api::Account {
+            id: val.id,
+            username: val.username,
+            acct: "FIXME_api::Account::acct".to_string(),
+            display_name: val.display_name,
+            
+            locked: false,
+            bot: false,
+            
+            created_at: "FIXME_api::Account::created_at".to_string(),
+            attribution_domains: vec![],
+            
+            note: "".to_string(),
+            url: "FIXME_api::Account::url".to_string(),
+            
+            avatar: "https://ferri.amy.mov/assets/pfp.png".to_string(),
+            avatar_static: "https://ferri.amy.mov/assets/pfp.png".to_string(),
+            header: "https://ferri.amy.mov/assets/pfp.png".to_string(),
+            header_static: "https://ferri.amy.mov/assets/pfp.png".to_string(),
+            
+            followers_count: 0,
+            following_count: 0,
+            statuses_count: 0,
+            last_status_at: "FIXME_api::Account::last_status_at".to_string(),
+            
+            emojis: vec![],
+            fields: vec![],
+        }
+    }
+}
