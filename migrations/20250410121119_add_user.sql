@@ -2,6 +2,10 @@ CREATE TABLE IF NOT EXISTS user
 (
 	-- UUID
 	id TEXT PRIMARY KEY NOT NULL,
+	acct TEXT NOT NULL,
+	url TEXT NOT NULL,
+	created_at TEXT NOT NULL,
+	remote BOOLEAN NOT NULL,
 	username TEXT NOT NULL,
 	actor_id TEXT NOT NULL UNIQUE,
 	display_name TEXT NOT NULL,

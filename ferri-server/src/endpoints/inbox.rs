@@ -50,19 +50,34 @@ async fn create_user(
     let host = url.host_str().unwrap();
     info!("creating user '{}'@'{}' ({:#?})", user.preferred_username, host, user);
     
-    let username = format!("{}@{}", user.preferred_username, host);
+    let (acct, remote) = if host != "ferri.amy.mov" {
+        (format!("{}@{}", user.preferred_username, host), true)
+    } else {
+        (user.preferred_username.clone(), false)
+    };
+
+    let url = format!("https://ferri.amy.mov/{}", acct);
 
     let uuid = Uuid::new_v4().to_string();
+    // FIXME: Pull from user
+    let ts = main::ap::new_ts();
     sqlx::query!(
         r#"
-            INSERT INTO user (id, username, actor_id, display_name)
-            VALUES (?1, ?2, ?3, ?4)
+          INSERT INTO user (
+            id, acct, url, remote, username,
+            actor_id, display_name, created_at
+          )
+          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
             ON CONFLICT(actor_id) DO NOTHING;
         "#,
         uuid,
-        username,
+        acct,
+        url,
+        remote,
+        user.preferred_username,
         actor,
-        user.name
+        user.name,
+        ts
     )
     .execute(conn)
     .await

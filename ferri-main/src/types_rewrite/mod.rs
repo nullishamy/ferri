@@ -1,7 +1,7 @@
 use serde::{Serialize, Deserialize};
 
-mod convert;
-pub use convert::*;
+pub mod convert;
+pub mod fetch;
 
 pub const AS_CONTEXT_RAW: &'static str = "https://www.w3.org/ns/activitystreams";
 pub fn as_context() -> ObjectContext {
@@ -16,10 +16,10 @@ pub enum ObjectContext {
 }
 
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
-pub struct ObjectUri(String);
+pub struct ObjectUri(pub String);
 
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
-pub struct ObjectUuid(String);
+pub struct ObjectUuid(pub String);
 
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
 pub struct Object {
@@ -29,22 +29,34 @@ pub struct Object {
 }
 
 pub mod db {
-    use serde::{Serialize, Deserialize};
+    use chrono::{DateTime, Utc};
     use super::*;
-    
-    #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
+
+    #[derive(Debug, Eq, PartialEq)]
     pub struct Actor {
         pub id: ObjectUri,
         pub inbox: String,
         pub outbox: String,
     }
 
-    #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
+    #[derive(Debug, Eq, PartialEq)]
+    pub struct UserPosts {
+        // User may have no posts
+        pub last_post_at: Option<DateTime<Utc>>
+    }
+
+    #[derive(Debug, Eq, PartialEq)]
     pub struct User {
         pub id: ObjectUuid,
-        pub actor_id: ObjectUri,
+        pub actor: Actor,
         pub username: String,
-        pub display_name: String
+        pub display_name: String,
+        pub acct: String,
+        pub remote: bool,
+        pub url: String,
+        pub created_at: DateTime<Utc>,
+        
+        pub posts: UserPosts
     }
 }
 
@@ -121,7 +133,7 @@ pub mod api {
         pub followers_count: i64,
         pub following_count: i64,
         pub statuses_count: i64,
-        pub last_status_at: String,
+        pub last_status_at: Option<String>,
         
         pub emojis: Vec<Emoji>,
         pub fields: Vec<CustomField>,

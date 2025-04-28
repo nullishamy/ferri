@@ -8,12 +8,12 @@ use rocket::{
 };
 use rocket_db_pools::Connection;
 
-#[get("/oauth/authorize?<client_id>&<scope>&<redirect_uri>&<_response_type>")]
+#[get("/oauth/authorize?<client_id>&<scope>&<redirect_uri>&<response_type>")]
 pub async fn authorize(
     client_id: &str,
     scope: &str,
     redirect_uri: &str,
-    _response_type: &str,
+    response_type: &str,
     mut db: Connection<Db>,
 ) -> Redirect {
     // For now, we will always authorize the request and assign it to an admin user

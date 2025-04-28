@@ -32,17 +32,17 @@ impl From<db::User> for api::Account {
         api::Account {
             id: val.id,
             username: val.username,
-            acct: "FIXME_api::Account::acct".to_string(),
+            acct: val.acct,
             display_name: val.display_name,
             
             locked: false,
             bot: false,
             
-            created_at: "FIXME_api::Account::created_at".to_string(),
+            created_at: val.created_at.to_rfc3339(),
             attribution_domains: vec![],
             
             note: "".to_string(),
-            url: "FIXME_api::Account::url".to_string(),
+            url: val.url,
             
             avatar: "https://ferri.amy.mov/assets/pfp.png".to_string(),
             avatar_static: "https://ferri.amy.mov/assets/pfp.png".to_string(),
@@ -52,7 +52,7 @@ impl From<db::User> for api::Account {
             followers_count: 0,
             following_count: 0,
             statuses_count: 0,
-            last_status_at: "FIXME_api::Account::last_status_at".to_string(),
+            last_status_at: val.posts.last_post_at.map(|ts| ts.to_rfc3339()),
             
             emojis: vec![],
             fields: vec![],

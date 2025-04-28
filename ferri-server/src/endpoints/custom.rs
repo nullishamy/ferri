@@ -1,4 +1,3 @@
-use main::ap::http::HttpClient;
 use rocket::{State, get, response::status};
 use rocket_db_pools::Connection;
 use main::ap;
@@ -8,7 +7,7 @@ use uuid::Uuid;
 
 use crate::{
     Db,
-    types::{self, activity, content, webfinger},
+    types::{self, webfinger},
 };
 
 #[get("/finger/<account>")]
@@ -86,44 +85,17 @@ pub async fn resolve_user(acct: &str, host: &str) -> types::Person {
 }
 
 #[get("/test")]
-pub async fn test(http: &State<HttpClient>, outbound: &State<OutboundQueue>) -> &'static str {
+pub async fn test(
+    outbound: &State<OutboundQueue>,
+    mut db: Connection<Db>
+) -> &'static str {
+    use main::types_rewrite::{ObjectUuid, fetch, api};
     outbound.0.send(ap::QueueMessage::Heartbeat);
-    
-    let user = resolve_user("amy@fedi.amy.mov", "fedi.amy.mov").await;
 
-    let post = activity::CreateActivity {
-        id: "https://ferri.amy.mov/activities/amy/20".to_string(),
-        ty: "Create".to_string(),
-        actor: "https://ferri.amy.mov/users/amy".to_string(),
-        object: content::Post {
-            context: "https://www.w3.org/ns/activitystreams".to_string(),
-            id: "https://ferri.amy.mov/users/amy/posts/20".to_string(),
-            ty: "Note".to_string(),
-            content: "My first post".to_string(),
-            ts: "2025-04-10T10:48:11Z".to_string(),
-            to: vec!["https://ferri.amy.mov/users/amy/followers".to_string()],
-            cc: vec!["https://www.w3.org/ns/activitystreams#Public".to_string()],
-            attributed_to: None
-        },
-        ts: "2025-04-10T10:48:11Z".to_string(),
-        to: vec!["https://ferri.amy.mov/users/amy/followers".to_string()],
-        cc: vec![],
-    };
-
-    let key_id = "https://ferri.amy.mov/users/amy#main-key";
-    let follow = http
-        .post(user.inbox)
-        .json(&post)
-        .sign(key_id)
-        .activity()
-        .send()
-        .await
-        .unwrap()
-        .text()
-        .await
-        .unwrap();
-
-    dbg!(follow);
+    let id = ObjectUuid("9b9d497b-2731-435f-a929-e609ca69dac9".to_string());
+    let user= dbg!(fetch::user_by_id(id, &mut **db).await.unwrap());
+    let apu: api::Account = user.into();
+    dbg!(apu);
 
     "Hello, world!"
 }

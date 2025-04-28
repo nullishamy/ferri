@@ -45,6 +45,7 @@ pub async fn home(
                 u.username, u.display_name, u.actor_id, p.created_at, p.boosted_post_id
             FROM post p
             INNER JOIN user u on p.user_id = u.id
+            ORDER BY datetime(p.created_at) DESC
         "#
     )
     .fetch_all(&mut **db)
