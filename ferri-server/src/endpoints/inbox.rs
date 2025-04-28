@@ -4,11 +4,14 @@ use main::ap;
 use rocket::serde::json::serde_json;
 use rocket::{State, post};
 use rocket_db_pools::Connection;
+use sqlx::SqliteConnection;
 use sqlx::Sqlite;
 use url::Url;
 use uuid::Uuid;
 use tracing::{event, span, Level, debug, warn, info, error};
 use crate::http_wrapper::HttpWrapper;
+
+use main::types_rewrite::{make, db, ObjectUuid, ObjectUri, self};
 
 use crate::{
     Db,
@@ -103,22 +106,92 @@ async fn create_follow(
     .unwrap();
 }
 
+struct RemoteInfo {
+    acct: String,
+    web_url: String,
+    is_remote: bool,    
+}
+
+fn get_remote_info(actor_url: &str, person: &Person) -> RemoteInfo {
+    let url = Url::parse(&actor_url).unwrap();
+    let host = url.host_str().unwrap();
+    
+    let (acct, remote) = if host != "ferri.amy.mov" {
+        (format!("{}@{}", person.preferred_username, host), true)
+    } else {
+        (person.preferred_username.clone(), false)
+    };
+
+    let url = format!("https://ferri.amy.mov/{}", acct);
+
+    RemoteInfo {
+        acct: acct.to_string(),
+        web_url: url,
+        is_remote: remote
+    }
+}
+
+async fn resolve_actor<'a>(
+    actor_url: &str,
+    http: &HttpWrapper<'a>,
+    conn: &mut SqliteConnection
+) -> Result<db::User, types_rewrite::DbError> {
+    let person = {
+        let res = http.get_person(&actor_url).await;
+        if let Err(e) = res {
+            error!("could not load user {}: {}", actor_url, e.to_string());
+            return Err(types_rewrite::DbError::FetchError(
+                format!("could not load user {}: {}", actor_url, e.to_string())
+            ))
+        }
+
+        res.unwrap()
+    };
+    
+    let user_id = ObjectUuid::new();
+    let remote_info = get_remote_info(actor_url, &person);
+
+    let actor = db::Actor {
+        id: ObjectUri(actor_url.to_string()),
+        inbox: person.inbox.clone(),
+        outbox: person.outbox.clone(),
+    };
+
+    info!("creating actor {}", actor_url);
+
+    let actor = make::new_actor(actor.clone(), conn).await.unwrap_or(actor);
+    
+    info!("creating user {} ({:#?})", remote_info.acct, person);
+
+    let user = db::User {
+        id: user_id,
+        actor,
+        username: person.name,
+        display_name: person.preferred_username,
+        acct: remote_info.acct,
+        remote: remote_info.is_remote,
+        url: remote_info.web_url,
+        created_at: main::ap::now(),
+
+        posts: db::UserPosts {
+            last_post_at: None
+        }
+    };
+
+    Ok(make::new_user(user.clone(), conn).await.unwrap_or(user))
+}
+
 async fn handle_follow_activity<'a>(
     followed_account: &str,
     activity: activity::FollowActivity,
     http: HttpWrapper<'a>,
     mut db: Connection<Db>,
 ) {
-    let user = http.get_person(&activity.actor).await;
-    if let Err(e) = user {
-        error!("could not load user {}: {}", activity.actor, e.to_string());
-        return
-    }
-    
-    let user = user.unwrap();
+    let actor = resolve_actor(&activity.actor, &http, &mut **db)
+        .await.unwrap();
 
-    create_actor(&user, &activity.actor, &mut **db).await;
-    create_user(&user, &activity.actor, &mut **db).await;
+    info!("{:?} follows {}", actor, followed_account);
+    
     create_follow(&activity, &mut **db).await;
 
     let follower = ap::User::from_actor_id(&activity.actor, &mut **db).await;
@@ -226,15 +299,18 @@ async fn handle_boost_activity<'a>(
     let reblog_id = ap::new_id();
 
     let attr_id = attributed_user.id();
+    // HACK: ON CONFLICT is to avoid duplicate remote posts coming in
+    //       check this better in future
     sqlx::query!("
        INSERT INTO post (id, uri, user_id, content, created_at)
        VALUES (?1, ?2, ?3, ?4, ?5)
+       ON CONFLICT(uri) DO NOTHING
     ", reblog_id, post.id, attr_id, post.content, post.ts)
         .execute(&mut **db)
         .await
         .unwrap();
 
-    let uri = format!("https://ferri.amy.mov/users/{}/posts/{}", actor_user.id(), post.id);
+    let uri = format!("https://ferri.amy.mov/users/{}/posts/{}", actor_user.id(), base_id);
     let user_id = actor_user.id();
     
     sqlx::query!("

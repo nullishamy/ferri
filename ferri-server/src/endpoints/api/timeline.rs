@@ -51,7 +51,8 @@ pub async fn home(
         display_name: String,
         username: String
     }
-    
+
+    // FIXME: query! can't cope with this. returns a type error
     let posts = sqlx::query_as::<_, Post>(
         r#"   
             WITH RECURSIVE get_home_timeline_with_boosts(
@@ -83,8 +84,6 @@ pub async fn home(
         .fetch_all(&mut **db)
         .await
         .unwrap();
-
-    dbg!(&posts);
 
     let mut out = Vec::<TimelineStatus>::new();
     for record in posts.iter() {

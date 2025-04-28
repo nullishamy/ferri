@@ -89,11 +89,11 @@ pub async fn test(
     outbound: &State<OutboundQueue>,
     mut db: Connection<Db>
 ) -> &'static str {
-    use main::types_rewrite::{ObjectUuid, fetch, api};
+    use main::types_rewrite::{ObjectUuid, get, api};
     outbound.0.send(ap::QueueMessage::Heartbeat);
 
     let id = ObjectUuid("9b9d497b-2731-435f-a929-e609ca69dac9".to_string());
-    let user= dbg!(fetch::user_by_id(id, &mut **db).await.unwrap());
+    let user= dbg!(get::user_by_id(id, &mut **db).await.unwrap());
     let apu: api::Account = user.into();
     dbg!(apu);
 

@@ -1,7 +1,19 @@
 use serde::{Serialize, Deserialize};
+use thiserror::Error;
+use std::fmt::Debug;
+use uuid::Uuid;
 
 pub mod convert;
-pub mod fetch;
+pub mod get;
+pub mod make;
+
+#[derive(Debug, Error)]
+pub enum DbError {
+    #[error("an unknown error occured when creating: {0}")]
+    CreationError(String),
+    #[error("an unknown error occured when fetching: {0}")]
+    FetchError(String)
+}
 
 pub const AS_CONTEXT_RAW: &'static str = "https://www.w3.org/ns/activitystreams";
 pub fn as_context() -> ObjectContext {
@@ -15,11 +27,17 @@ pub enum ObjectContext {
     Vec(Vec<serde_json::Value>),
 }
 
-#[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Clone)]
 pub struct ObjectUri(pub String);
 
-#[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Clone)]
 pub struct ObjectUuid(pub String);
+
+impl ObjectUuid {
+    pub fn new() -> Self {
+        Self(Uuid::new_v4().to_string())
+    }
+}
 
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
 pub struct Object {
@@ -32,20 +50,20 @@ pub mod db {
     use chrono::{DateTime, Utc};
     use super::*;
 
-    #[derive(Debug, Eq, PartialEq)]
+    #[derive(Debug, Eq, PartialEq, Clone)]
     pub struct Actor {
         pub id: ObjectUri,
         pub inbox: String,
         pub outbox: String,
     }
 
-    #[derive(Debug, Eq, PartialEq)]
+    #[derive(Debug, Eq, PartialEq, Clone)]
     pub struct UserPosts {
         // User may have no posts
         pub last_post_at: Option<DateTime<Utc>>
     }
 
-    #[derive(Debug, Eq, PartialEq)]
+    #[derive(Debug, Eq, PartialEq, Clone)]
     pub struct User {
         pub id: ObjectUuid,
         pub actor: Actor,

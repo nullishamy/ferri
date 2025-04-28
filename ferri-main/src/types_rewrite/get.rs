@@ -1,16 +1,10 @@
 use crate::types_rewrite::{ObjectUuid, ObjectUri, db};
 use sqlx::SqliteConnection;
-use thiserror::Error;
 use tracing::info;
 use chrono::{NaiveDateTime, DateTime, Utc};
+use crate::types_rewrite::DbError;
 
 const SQLITE_TIME_FMT: &'static str = "%Y-%m-%d %H:%M:%S";
-
-#[derive(Debug, Error)]
-pub enum FetchError {
-    #[error("an unknown error occured when fetching: {0}")]
-    Unknown(String)
-}
 
 fn parse_ts(ts: String) -> Option<DateTime<Utc>> {
     NaiveDateTime::parse_from_str(&ts, SQLITE_TIME_FMT)
@@ -18,7 +12,7 @@ fn parse_ts(ts: String) -> Option<DateTime<Utc>> {
         .map(|nt| nt.and_utc())
 }
 
-pub async fn user_by_id(id: ObjectUuid, conn: &mut SqliteConnection) -> Result<db::User, FetchError> {
+pub async fn user_by_id(id: ObjectUuid, conn: &mut SqliteConnection) -> Result<db::User, DbError> {
     info!("fetching user by uuid '{:?}' from the database", id);
     
     let record = sqlx::query!(r#"
@@ -39,7 +33,7 @@ pub async fn user_by_id(id: ObjectUuid, conn: &mut SqliteConnection) -> Result<d
     "#, id.0)
         .fetch_one(&mut *conn)
         .await
-        .map_err(|e| FetchError::Unknown(e.to_string()))?;
+        .map_err(|e| DbError::FetchError(e.to_string()))?;
 
     let follower_count = sqlx::query_scalar!(r#"
       SELECT COUNT(follower_id)
@@ -48,7 +42,7 @@ pub async fn user_by_id(id: ObjectUuid, conn: &mut SqliteConnection) -> Result<d
     "#, record.actor_id)
         .fetch_one(&mut *conn)
         .await
-        .map_err(|e| FetchError::Unknown(e.to_string()))?;
+        .map_err(|e| DbError::FetchError(e.to_string()))?;
 
     let last_post_at = sqlx::query_scalar!(r#"
       SELECT datetime(p.created_at)
@@ -59,7 +53,7 @@ pub async fn user_by_id(id: ObjectUuid, conn: &mut SqliteConnection) -> Result<d
     "#, record.user_id)
         .fetch_one(&mut *conn)
         .await
-        .map_err(|e| FetchError::Unknown(e.to_string()))?
+        .map_err(|e| DbError::FetchError(e.to_string()))?
         .and_then(|ts| {
             info!("parsing timestamp {}", ts);
             parse_ts(ts)
