@@ -1,6 +1,5 @@
 use chrono::Local;
 use tracing::Instrument;
-use main::ap;
 use rocket::serde::json::serde_json;
 use rocket::{State, post};
 use rocket_db_pools::Connection;
@@ -11,12 +10,12 @@ use uuid::Uuid;
 use tracing::{event, span, Level, debug, warn, info, error};
 use crate::http_wrapper::HttpWrapper;
 
-use main::types_rewrite::{make, db, ObjectUuid, ObjectUri, self};
+use main::types_rewrite::{make, db, ObjectUuid, ObjectUri, self, ap};
 
 use crate::{
     Db,
     http::HttpClient,
-    types::{Person, content::Post, activity},
+    types::{content::Post, activity},
 };
 
 fn handle_delete_activity(activity: activity::DeleteActivity) {
@@ -24,7 +23,7 @@ fn handle_delete_activity(activity: activity::DeleteActivity) {
 }
 
 async fn create_actor(
-    user: &Person,
+    user: &ap::Person,
     actor: &str,
     conn: impl sqlx::Executor<'_, Database = Sqlite>,
 ) {
@@ -44,7 +43,7 @@ async fn create_actor(
 }
 
 async fn create_user(
-    user: &Person,
+    user: &ap::Person,
     actor: &str,
     conn: impl sqlx::Executor<'_, Database = Sqlite>,
 ) {
@@ -112,7 +111,7 @@ struct RemoteInfo {
     is_remote: bool,    
 }
 
-fn get_remote_info(actor_url: &str, person: &Person) -> RemoteInfo {
+fn get_remote_info(actor_url: &str, person: &ap::Person) -> RemoteInfo {
     let url = Url::parse(&actor_url).unwrap();
     let host = url.host_str().unwrap();
     
@@ -194,18 +193,18 @@ async fn handle_follow_activity<'a>(
     
     create_follow(&activity, &mut **db).await;
 
-    let follower = ap::User::from_actor_id(&activity.actor, &mut **db).await;
-    let followed = ap::User::from_id(&followed_account, &mut **db).await.unwrap();
-    let outbox = ap::Outbox::for_user(followed.clone(), http.client());
+    let follower = main::ap::User::from_actor_id(&activity.actor, &mut **db).await;
+    let followed = main::ap::User::from_id(&followed_account, &mut **db).await.unwrap();
+    let outbox = main::ap::Outbox::for_user(followed.clone(), http.client());
 
-    let activity = ap::Activity {
+    let activity = main::ap::Activity {
         id: format!("https://ferri.amy.mov/activities/{}", Uuid::new_v4()),
-        ty: ap::ActivityType::Accept,
+        ty: main::ap::ActivityType::Accept,
         object: activity.id,
         ..Default::default()
     };
 
-    let req = ap::OutgoingActivity {
+    let req = main::ap::OutgoingActivity {
         signed_by: format!(
             "https://ferri.amy.mov/users/{}#main-key",
             followed.username()
@@ -290,13 +289,13 @@ async fn handle_boost_activity<'a>(
     debug!("creating user {}", attribution);
     create_user(&post_user, &attribution, &mut **db).await;
     
-    let attributed_user = ap::User::from_actor_id(&attribution, &mut **db).await;
-    let actor_user = ap::User::from_actor_id(&activity.actor, &mut **db).await;
+    let attributed_user = main::ap::User::from_actor_id(&attribution, &mut **db).await;
+    let actor_user = main::ap::User::from_actor_id(&activity.actor, &mut **db).await;
     
-    let base_id = ap::new_id();
-    let now = ap::new_ts();
+    let base_id = main::ap::new_id();
+    let now = main::ap::new_ts();
     
-    let reblog_id = ap::new_id();
+    let reblog_id = main::ap::new_id();
 
     let attr_id = attributed_user.id();
     // HACK: ON CONFLICT is to avoid duplicate remote posts coming in
@@ -345,7 +344,7 @@ async fn handle_create_activity<'a>(
     debug!("creating user {}", activity.actor);
     create_user(&user, &activity.actor, &mut **db).await;
 
-    let user = ap::User::from_actor_id(&activity.actor, &mut **db).await;
+    let user = main::ap::User::from_actor_id(&activity.actor, &mut **db).await;
     debug!("user created {:?}", user);
 
     let user_id = user.id();

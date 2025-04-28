@@ -1,6 +1,5 @@
 pub mod activity;
 pub mod content;
-pub mod instance;
 pub mod oauth;
 pub mod webfinger;
 
@@ -9,6 +8,7 @@ use rocket::serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 #[serde(crate = "rocket::serde")]
+#[deprecated]
 pub struct UserKey {
     pub id: String,
     pub owner: String,
@@ -19,6 +19,7 @@ pub struct UserKey {
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 #[serde(crate = "rocket::serde")]
+#[deprecated]
 pub struct Person {
     // FIXME: This is because Masto sends an array but we don't care
     #[serde(rename = "@context")]

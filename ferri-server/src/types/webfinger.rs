@@ -2,6 +2,7 @@ use rocket::serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize, Debug)]
 #[serde(crate = "rocket::serde")]
+#[deprecated]
 pub struct Link {
     pub rel: String,
     #[serde(rename = "type")]
@@ -11,6 +12,7 @@ pub struct Link {
 
 #[derive(Deserialize, Serialize, Debug)]
 #[serde(crate = "rocket::serde")]
+#[deprecated]
 pub struct WebfingerResponse {
     pub subject: String,
     pub aliases: Vec<String>,

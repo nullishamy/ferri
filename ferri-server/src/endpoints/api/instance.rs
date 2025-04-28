@@ -2,7 +2,7 @@ use rocket::{get, serde::json::Json, State};
 
 use crate::Config;
 
-use crate::types::instance::{
+use main::types_rewrite::api::{
     Accounts, Configuration, Contact, Instance, MediaAttachments, Polls, Registrations, Statuses,
     Thumbnail, Translation, Urls,
 };

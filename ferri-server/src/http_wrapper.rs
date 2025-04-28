@@ -1,7 +1,7 @@
 use thiserror::Error;
 use tracing::{error, event, Level};
 use crate::http::HttpClient;
-use crate::types::Person;
+use main::types_rewrite::ap;
 use std::fmt::Debug;
 
 pub struct HttpWrapper<'a> {
@@ -65,7 +65,7 @@ impl <'a> HttpWrapper<'a> {
         Ok(decoded.unwrap())
     }
 
-    pub async fn get_person(&self, url: &str) -> Result<Person, HttpError> {
+    pub async fn get_person(&self, url: &str) -> Result<ap::Person, HttpError> {
         self.get("Person", url).await
     }
 }

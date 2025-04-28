@@ -2,6 +2,7 @@ use rocket::serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Default)]
 #[serde(crate = "rocket::serde")]
+#[deprecated]
 pub struct Post {
     // FIXME: This is because Masto sends an array but we don't care
     #[serde(rename = "@context")]
