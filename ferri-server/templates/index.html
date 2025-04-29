@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <base href="https://ferri.amy.mov/admin/">
+    
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Ferri Test</title>
+    
+    <link rel="stylesheet" href="https://raw.githubusercontent.com/tailwindlabs/tailwindcss/dbc8023a08964f513c20796e170cb91ce891df3f/packages/tailwindcss/preflight.css">
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+  </head>
+  <body>
+    <button hx-post="clicked" hx-swap="outerHTML">
+      Click Me {{ val }}
+    </button>
+  </body>
+</html>

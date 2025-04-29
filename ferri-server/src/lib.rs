@@ -1,6 +1,6 @@
 use endpoints::{
     api::{self, timeline},
-    custom, inbox, oauth, user, well_known,
+    admin, custom, inbox, oauth, user, well_known,
 };
 
 use tracing_subscriber::fmt;
@@ -122,6 +122,13 @@ pub fn launch(cfg: Config) -> Rocket<Build> {
         .attach(Db::init())
         .attach(cors::CORS)
         .mount("/assets", rocket::fs::FileServer::from("./assets"))
+        .mount(
+            "/admin",
+            routes![
+                admin::index,
+                admin::button_clicked
+            ]   
+        )
         .mount(
             "/",
             routes![

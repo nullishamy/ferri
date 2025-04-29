@@ -4,6 +4,8 @@ pub mod oauth;
 pub mod user;
 
 pub mod api;
+pub mod admin;
+
 pub mod custom;
 pub mod inbox;
 pub mod well_known;
