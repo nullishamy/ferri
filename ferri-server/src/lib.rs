@@ -19,7 +19,6 @@ use rocket_db_pools::{Connection, Database, sqlx};
 
 mod cors;
 mod endpoints;
-mod types;
 mod http_wrapper;
 
 #[derive(Database)]
@@ -32,9 +31,7 @@ async fn user_profile() -> (ContentType, &'static str) {
 }
 
 #[get("/activities/<_activity>")]
-async fn activity_endpoint(_activity: String) {
-
-}
+async fn activity_endpoint(_activity: String) {}
 
 #[derive(Debug)]
 pub struct AuthenticatedUser {
@@ -45,8 +42,7 @@ pub struct AuthenticatedUser {
 }
 
 #[derive(Debug)]
-pub enum LoginError {
-}
+pub enum LoginError {}
 
 #[rocket::async_trait]
 impl<'a> FromRequest<'a> for AuthenticatedUser {
@@ -90,6 +86,11 @@ impl<'a> FromRequest<'a> for AuthenticatedUser {
 pub struct OutboundQueue(pub ap::QueueHandle);
 pub struct InboundQueue(pub ap::QueueHandle);
 
+pub struct Helpers {
+    http: http::HttpClient,
+    config: Config,
+}
+
 pub fn launch(cfg: Config) -> Rocket<Build> {
     let format = fmt::format()
         .with_ansi(true)
@@ -99,7 +100,7 @@ pub fn launch(cfg: Config) -> Rocket<Build> {
         .with_thread_names(false)
         .with_source_location(false)
         .compact();
-    
+
     tracing_subscriber::fmt()
         .event_format(format)
         .with_writer(std::io::stdout)
@@ -111,10 +112,11 @@ pub fn launch(cfg: Config) -> Rocket<Build> {
     let inbound = ap::RequestQueue::new("inbound");
     let inbound_handle = inbound.spawn();
 
-    let http_client = http::HttpClient::new();
     build()
-        .manage(cfg)
-        .manage(http_client)
+        .manage(Helpers {
+            config: cfg,
+            http: http::HttpClient::new(),
+        })
         .manage(OutboundQueue(outbound_handle))
         .manage(InboundQueue(inbound_handle))
         .attach(Db::init())

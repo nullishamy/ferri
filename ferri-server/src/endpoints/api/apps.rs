@@ -1,11 +1,23 @@
 use rocket::{form::Form, post, serde::json::Json};
 
 use crate::Db;
-use crate::types::oauth::{App, CredentialApplication};
+use main::types::api;
+use rocket::FromForm;
 use rocket_db_pools::Connection;
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize, Debug, FromForm, Clone)]
+pub struct OauthApp {
+    pub client_name: String,
+    pub redirect_uris: Vec<String>,
+    pub scopes: String,
+}
 
 #[post("/apps", data = "<app>")]
-pub async fn new_app(app: Form<App>, mut db: Connection<Db>) -> Json<CredentialApplication> {
+pub async fn new_app(
+    app: Form<OauthApp>,
+    mut db: Connection<Db>,
+) -> Json<api::CredentialApplication> {
     let secret = main::gen_token(15);
 
     // Abort when we encounter a duplicate
@@ -22,7 +34,7 @@ pub async fn new_app(app: Form<App>, mut db: Connection<Db>) -> Json<CredentialA
     .await
     .is_err();
 
-    let mut app: App = app.clone();
+    let mut app: OauthApp = app.clone();
 
     if is_app_present {
         let existing_app = sqlx::query!("SELECT * FROM app WHERE client_id = ?1", app.client_name)
@@ -34,7 +46,7 @@ pub async fn new_app(app: Form<App>, mut db: Connection<Db>) -> Json<CredentialA
         app.scopes = existing_app.scopes;
     }
 
-    Json(CredentialApplication {
+    Json(api::CredentialApplication {
         name: app.client_name.clone(),
         scopes: app.scopes.clone(),
         redirect_uris: app.redirect_uris.clone(),

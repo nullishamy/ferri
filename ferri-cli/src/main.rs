@@ -47,7 +47,7 @@ async fn main() {
         )
         .execute(&mut *conn)
         .await
-            .unwrap();
+        .unwrap();
 
         let ts = main::ap::new_ts();
 

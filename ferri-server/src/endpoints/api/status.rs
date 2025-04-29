@@ -3,8 +3,7 @@ use main::ap::{self, http::HttpClient};
 use rocket::{
     FromForm, State,
     form::Form,
-    post,
-    get,
+    get, post,
     serde::{Deserialize, Serialize, json::Json},
 };
 use rocket_db_pools::Connection;
@@ -23,14 +22,14 @@ pub struct Status {
 #[serde(crate = "rocket::serde")]
 pub struct StatusContext {
     ancestors: Vec<Status>,
-    descendants: Vec<Status>
+    descendants: Vec<Status>,
 }
 
 #[get("/statuses/<_status>/context")]
 pub async fn status_context(
     _status: &str,
     _user: AuthenticatedUser,
-    _db: Connection<Db>
+    _db: Connection<Db>,
 ) -> Json<StatusContext> {
     Json(StatusContext {
         ancestors: vec![],
@@ -56,10 +55,13 @@ async fn create_status(
 
     post.save(&mut **db).await;
 
-    let actor = sqlx::query!("SELECT * FROM actor WHERE id = ?1", "https://fedi.amy.mov/users/9zkygethkdw60001")
-        .fetch_one(&mut **db)
-        .await
-        .unwrap();
+    let actor = sqlx::query!(
+        "SELECT * FROM actor WHERE id = ?1",
+        "https://fedi.amy.mov/users/9zkygethkdw60001"
+    )
+    .fetch_one(&mut **db)
+    .await
+    .unwrap();
 
     let create_id = format!("https://ferri.amy.mov/activities/{}", Uuid::new_v4());
 
@@ -73,11 +75,7 @@ async fn create_status(
         ..Default::default()
     };
 
-    let actor = ap::Actor::from_raw(
-        actor.id.clone(),
-        actor.inbox.clone(),
-        actor.outbox.clone(),
-    );
+    let actor = ap::Actor::from_raw(actor.id.clone(), actor.inbox.clone(), actor.outbox.clone());
 
     let req = ap::OutgoingActivity {
         req: activity,
@@ -134,19 +132,19 @@ async fn create_status(
 #[post("/statuses", data = "<status>")]
 pub async fn new_status(
     db: Connection<Db>,
-    http: &State<HttpClient>,
+    helpers: &State<crate::Helpers>,
     status: Form<Status>,
     user: AuthenticatedUser,
 ) -> Json<TimelineStatus> {
-    Json(create_status(user, db, http.inner(), &status).await)
+    Json(create_status(user, db, &helpers.http, &status).await)
 }
 
 #[post("/statuses", data = "<status>", rank = 2)]
 pub async fn new_status_json(
     db: Connection<Db>,
-    http: &State<HttpClient>,
+    helpers: &State<crate::Helpers>,
     status: Json<Status>,
     user: AuthenticatedUser,
 ) -> Json<TimelineStatus> {
-    Json(create_status(user, db, http.inner(), &status).await)
+    Json(create_status(user, db, &helpers.http, &status).await)
 }

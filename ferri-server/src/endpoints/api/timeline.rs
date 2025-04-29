@@ -1,7 +1,6 @@
-use crate::{AuthenticatedUser, Db, endpoints::api::user::CredentialAcount, Config};
+use crate::{AuthenticatedUser, Db, endpoints::api::user::CredentialAcount};
 use rocket::{
-    State,
-    get,
+    State, get,
     serde::{Deserialize, Serialize, json::Json},
 };
 use rocket_db_pools::Connection;
@@ -36,9 +35,11 @@ pub struct TimelineStatus {
 #[get("/timelines/home")]
 pub async fn home(
     mut db: Connection<Db>,
-    config: &State<Config>,
+    helpers: &State<crate::Helpers>,
     _user: AuthenticatedUser,
 ) -> Json<Vec<TimelineStatus>> {
+    let config = &helpers.config;
+
     #[derive(sqlx::FromRow, Debug)]
     struct Post {
         is_boost_source: bool,
@@ -49,7 +50,7 @@ pub async fn home(
         created_at: String,
         boosted_post_id: Option<String>,
         display_name: String,
-        username: String
+        username: String,
     }
 
     // FIXME: query! can't cope with this. returns a type error
@@ -78,12 +79,12 @@ pub async fn home(
            FROM get_home_timeline_with_boosts
            JOIN post p ON p.id = get_home_timeline_with_boosts.id
            JOIN user u ON u.id = p.user_id;
-        "#
+        "#,
     )
-        .bind("https://ferri.amy.mov/users/9b9d497b-2731-435f-a929-e609ca69dac9")
-        .fetch_all(&mut **db)
-        .await
-        .unwrap();
+    .bind("https://ferri.amy.mov/users/9b9d497b-2731-435f-a929-e609ca69dac9")
+    .fetch_all(&mut **db)
+    .await
+    .unwrap();
 
     let mut out = Vec::<TimelineStatus>::new();
     for record in posts.iter() {
@@ -91,7 +92,7 @@ pub async fn home(
         if let Some(ref boosted_id) = record.boosted_post_id {
             let user_uri = config.user_url(&record.user_id);
             let record = posts.iter().find(|p| &p.post_id == boosted_id).unwrap();
-            
+
             boost = Some(Box::new(TimelineStatus {
                 id: record.post_id.clone(),
                 created_at: record.created_at.clone(),
@@ -131,7 +132,7 @@ pub async fn home(
                     following_count: 1,
                     statuses_count: 1,
                     last_status_at: "2025-04-10T22:14:34Z".to_string(),
-                },                
+                },
             }))
         }
 

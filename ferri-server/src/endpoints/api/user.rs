@@ -1,14 +1,14 @@
 use main::ap;
+use rocket::response::status::NotFound;
 use rocket::{
     State, get, post,
     serde::{Deserialize, Serialize, json::Json},
 };
 use rocket_db_pools::Connection;
 use uuid::Uuid;
-use rocket::response::status::NotFound;
 
 use crate::timeline::{TimelineAccount, TimelineStatus};
-use crate::{AuthenticatedUser, Db, http::HttpClient};
+use crate::{AuthenticatedUser, Db};
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(crate = "rocket::serde")]
@@ -60,17 +60,19 @@ pub async fn verify_credentials() -> Json<CredentialAcount> {
 #[post("/accounts/<uuid>/follow")]
 pub async fn new_follow(
     mut db: Connection<Db>,
-    http: &State<HttpClient>,
+    helpers: &State<crate::Helpers>,
     uuid: &str,
     user: AuthenticatedUser,
 ) -> Result<(), NotFound<String>> {
+    let http = &helpers.http;
+
     let follower = ap::User::from_actor_id(&user.actor_id, &mut **db).await;
-    
+
     let followed = ap::User::from_id(uuid, &mut **db)
         .await
         .map_err(|e| NotFound(e.to_string()))?;
 
-    let outbox = ap::Outbox::for_user(follower.clone(), http.inner());
+    let outbox = ap::Outbox::for_user(follower.clone(), http);
 
     let activity = ap::Activity {
         id: format!("https://ferri.amy.mov/activities/{}", Uuid::new_v4()),
@@ -87,7 +89,7 @@ pub async fn new_follow(
 
     req.save(&mut **db).await;
     outbox.post(req).await;
-    
+
     Ok(())
 }
 

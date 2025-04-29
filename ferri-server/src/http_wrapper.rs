@@ -1,12 +1,12 @@
-use thiserror::Error;
-use tracing::{error, event, Level};
 use crate::http::HttpClient;
-use main::types_rewrite::ap;
+use main::types::ap;
 use std::fmt::Debug;
+use thiserror::Error;
+use tracing::{Level, error, event};
 
 pub struct HttpWrapper<'a> {
     client: &'a HttpClient,
-    key_id: &'a str
+    key_id: &'a str,
 }
 
 #[derive(Error, Debug)]
@@ -17,23 +17,25 @@ pub enum HttpError {
     ParseFailure(String, String, String),
 }
 
-impl <'a> HttpWrapper<'a> {
+impl<'a> HttpWrapper<'a> {
     pub fn new(client: &'a HttpClient, key_id: &'a str) -> HttpWrapper<'a> {
-        Self {
-            client,
-            key_id
-        }
+        Self { client, key_id }
     }
 
     pub fn client(&self) -> &'a HttpClient {
-        &self.client
+        self.client
     }
 
-    async fn get<T : serde::de::DeserializeOwned + Debug>(&self, ty: &str, url: &str) -> Result<T, HttpError> {
+    async fn get<T: serde::de::DeserializeOwned + Debug>(
+        &self,
+        ty: &str,
+        url: &str,
+    ) -> Result<T, HttpError> {
         let ty = ty.to_string();
         event!(Level::INFO, url, "loading {}", ty);
-        
-        let http_result = self.client
+
+        let http_result = self
+            .client
             .get(url)
             .sign(self.key_id)
             .activity()
@@ -51,15 +53,15 @@ impl <'a> HttpWrapper<'a> {
             return Err(HttpError::LoadFailure(ty, url.to_string()));
         }
 
-        let decoded = serde_json::from_str::<T>(&raw_body.unwrap());
-        
+        let raw_body = raw_body.unwrap();
+        let decoded = serde_json::from_str::<T>(&raw_body);
+
         if let Err(e) = decoded {
-            error!("could not parse {} for url {}: {:#?}", ty, url, e);
-            return Err(HttpError::ParseFailure(
-                ty,
-                url.to_string(),
-                e.to_string()
-            ));
+            error!(
+                "could not parse {} for url {}: {:#?} {}",
+                ty, url, e, &raw_body
+            );
+            return Err(HttpError::ParseFailure(ty, url.to_string(), e.to_string()));
         }
 
         Ok(decoded.unwrap())

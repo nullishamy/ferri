@@ -1,14 +1,13 @@
-use rocket::{get, serde::json::Json, State};
+use rocket::{State, get, serde::json::Json};
 
-use crate::Config;
-
-use main::types_rewrite::api::{
+use main::types::api::{
     Accounts, Configuration, Contact, Instance, MediaAttachments, Polls, Registrations, Statuses,
     Thumbnail, Translation, Urls,
 };
 
 #[get("/instance")]
-pub async fn instance(config: &State<Config>) -> Json<Instance> {
+pub async fn instance(helpers: &State<crate::Helpers>) -> Json<Instance> {
+    let config = &helpers.config;
     Json(Instance {
         domain: config.host().to_string(),
         title: "Ferri".to_string(),

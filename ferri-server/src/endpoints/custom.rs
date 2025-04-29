@@ -1,14 +1,8 @@
+use crate::{Db, OutboundQueue};
+use main::types::{ap, api};
 use rocket::{State, get, response::status};
 use rocket_db_pools::Connection;
-use main::ap;
-use crate::OutboundQueue;
-
 use uuid::Uuid;
-
-use crate::{
-    Db,
-    types::{self, webfinger},
-};
 
 #[get("/finger/<account>")]
 pub async fn finger_account(mut db: Connection<Db>, account: &str) -> status::Accepted<String> {
@@ -23,7 +17,7 @@ pub async fn finger_account(mut db: Connection<Db>, account: &str) -> status::Ac
       VALUES (?1, ?2, ?3)
       ON CONFLICT(id) DO NOTHING
     "#,
-        user.id,
+        user.obj.id.0,
         user.inbox,
         user.outbox
     )
@@ -41,7 +35,7 @@ pub async fn finger_account(mut db: Connection<Db>, account: &str) -> status::Ac
     "#,
         uuid,
         username,
-        user.id,
+        user.obj.id.0,
         user.preferred_username
     )
     .execute(&mut **db)
@@ -51,7 +45,7 @@ pub async fn finger_account(mut db: Connection<Db>, account: &str) -> status::Ac
     status::Accepted(format!("https://ferri.amy.mov/users/{}", uuid))
 }
 
-pub async fn resolve_user(acct: &str, host: &str) -> types::Person {
+pub async fn resolve_user(acct: &str, host: &str) -> ap::Person {
     let client = reqwest::Client::new();
     let url = format!(
         "https://{}/.well-known/webfinger?resource=acct:{}",
@@ -62,7 +56,7 @@ pub async fn resolve_user(acct: &str, host: &str) -> types::Person {
         .send()
         .await
         .unwrap()
-        .json::<webfinger::WebfingerResponse>()
+        .json::<api::WebfingerHit>()
         .await
         .unwrap();
 
@@ -79,21 +73,18 @@ pub async fn resolve_user(acct: &str, host: &str) -> types::Person {
         .send()
         .await
         .unwrap()
-        .json::<types::Person>()
+        .json::<ap::Person>()
         .await
         .unwrap()
 }
 
 #[get("/test")]
-pub async fn test(
-    outbound: &State<OutboundQueue>,
-    mut db: Connection<Db>
-) -> &'static str {
-    use main::types_rewrite::{ObjectUuid, get, api};
-    outbound.0.send(ap::QueueMessage::Heartbeat);
+pub async fn test(outbound: &State<OutboundQueue>, mut db: Connection<Db>) -> &'static str {
+    use main::types::{ObjectUuid, api, get};
+    outbound.0.send(main::ap::QueueMessage::Heartbeat);
 
     let id = ObjectUuid("9b9d497b-2731-435f-a929-e609ca69dac9".to_string());
-    let user= dbg!(get::user_by_id(id, &mut **db).await.unwrap());
+    let user = dbg!(get::user_by_id(id, &mut db).await.unwrap());
     let apu: api::Account = user.into();
     dbg!(apu);
 

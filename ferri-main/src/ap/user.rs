@@ -35,7 +35,6 @@ pub struct User {
     display_name: String,
 }
 
-
 #[derive(Error, Debug)]
 pub enum UserError {
     #[error("user `{0}` not found")]
@@ -67,7 +66,10 @@ impl User {
         format!("https://ferri.amy.mov/users/{}", self.id())
     }
 
-    pub async fn from_id(uuid: &str, conn: impl sqlx::Executor<'_, Database = Sqlite>) -> Result<User, UserError> {
+    pub async fn from_id(
+        uuid: &str,
+        conn: impl sqlx::Executor<'_, Database = Sqlite>,
+    ) -> Result<User, UserError> {
         let user = sqlx::query!(
             r#"
                 SELECT u.*, a.id as "actor_own_id", a.inbox, a.outbox
@@ -77,10 +79,10 @@ impl User {
             "#,
             uuid
         )
-            .fetch_one(conn)
-            .await
-            .map_err(|_| UserError::NotFound(uuid.to_string()))?;
-        
+        .fetch_one(conn)
+        .await
+        .map_err(|_| UserError::NotFound(uuid.to_string()))?;
+
         Ok(User {
             id: user.id,
             username: user.username,
@@ -106,10 +108,10 @@ impl User {
             "#,
             username
         )
-            .fetch_one(conn)
-            .await
-            .unwrap();
-        
+        .fetch_one(conn)
+        .await
+        .unwrap();
+
         User {
             id: user.id,
             username: user.username,

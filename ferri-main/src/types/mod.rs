@@ -1,6 +1,6 @@
-use serde::{Serialize, Deserialize};
-use thiserror::Error;
+use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
+use thiserror::Error;
 use uuid::Uuid;
 
 pub mod convert;
@@ -12,10 +12,10 @@ pub enum DbError {
     #[error("an unknown error occured when creating: {0}")]
     CreationError(String),
     #[error("an unknown error occured when fetching: {0}")]
-    FetchError(String)
+    FetchError(String),
 }
 
-pub const AS_CONTEXT_RAW: &'static str = "https://www.w3.org/ns/activitystreams";
+pub const AS_CONTEXT_RAW: &str = "https://www.w3.org/ns/activitystreams";
 pub fn as_context() -> ObjectContext {
     ObjectContext::Str(AS_CONTEXT_RAW.to_string())
 }
@@ -33,6 +33,12 @@ pub struct ObjectUri(pub String);
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Clone)]
 pub struct ObjectUuid(pub String);
 
+impl Default for ObjectUuid {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ObjectUuid {
     pub fn new() -> Self {
         Self(Uuid::new_v4().to_string())
@@ -42,13 +48,13 @@ impl ObjectUuid {
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
 pub struct Object {
     #[serde(rename = "@context")]
-    context: ObjectContext,
-    id: ObjectUri,
+    pub context: ObjectContext,
+    pub id: ObjectUri,
 }
 
 pub mod db {
-    use chrono::{DateTime, Utc};
     use super::*;
+    use chrono::{DateTime, Utc};
 
     #[derive(Debug, Eq, PartialEq, Clone)]
     pub struct Actor {
@@ -60,7 +66,7 @@ pub mod db {
     #[derive(Debug, Eq, PartialEq, Clone)]
     pub struct UserPosts {
         // User may have no posts
-        pub last_post_at: Option<DateTime<Utc>>
+        pub last_post_at: Option<DateTime<Utc>>,
     }
 
     #[derive(Debug, Eq, PartialEq, Clone)]
@@ -73,59 +79,183 @@ pub mod db {
         pub remote: bool,
         pub url: String,
         pub created_at: DateTime<Utc>,
-        
-        pub posts: UserPosts
+
+        pub posts: UserPosts,
     }
 }
 
 pub mod ap {
-    use serde::{Serialize, Deserialize};
     use super::*;
-    
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
+    pub enum ActivityType {
+        Create,
+        Note,
+        Delete,
+        Accept,
+        Announce,
+        Like,
+        Follow,
+    }
+
+    #[derive(Serialize, Deserialize, Debug)]
+    pub struct MinimalActivity {
+        #[serde(flatten)]
+        pub obj: Object,
+        pub ty: ActivityType,
+    }
+
+    pub type DeleteActivity = BasicActivity;
+    pub type LikeActivity = BasicActivity;
+
+    #[derive(Serialize, Deserialize, Debug)]
+    pub struct BasicActivity {
+        #[serde(flatten)]
+        pub obj: Object,
+
+        pub object: String,
+        pub actor: String,
+    }
+
+    #[derive(Serialize, Deserialize, Debug)]
+    pub struct CreateActivity {
+        #[serde(flatten)]
+        pub obj: Object,
+
+        pub ty: ActivityType,
+
+        pub object: Post,
+        pub actor: String,
+        pub to: Vec<String>,
+        pub cc: Vec<String>,
+
+        #[serde(rename = "published")]
+        pub ts: String,
+    }
+
+    #[derive(Serialize, Deserialize, Debug)]
+    pub struct FollowActivity {
+        #[serde(flatten)]
+        pub obj: Object,
+
+        pub ty: ActivityType,
+
+        pub object: String,
+        pub actor: String,
+    }
+
+    #[derive(Serialize, Deserialize, Debug)]
+    pub struct AcceptActivity {
+        #[serde(flatten)]
+        pub obj: Object,
+
+        pub ty: ActivityType,
+
+        pub object: String,
+        pub actor: String,
+    }
+
+    #[derive(Serialize, Deserialize, Debug)]
+    pub struct BoostActivity {
+        #[serde(flatten)]
+        pub obj: Object,
+
+        pub ty: ActivityType,
+
+        pub actor: String,
+        pub published: String,
+        pub to: Vec<String>,
+        pub cc: Vec<String>,
+        pub object: String,
+    }
+
+    #[derive(Serialize, Deserialize, Debug)]
+    pub struct Post {
+        #[serde(flatten)]
+        pub obj: Object,
+
+        pub ty: ActivityType,
+
+        #[serde(rename = "published")]
+        pub ts: String,
+        pub content: String,
+        pub to: Vec<String>,
+        pub cc: Vec<String>,
+
+        #[serde(rename = "attributedTo")]
+        pub attributed_to: Option<String>,
+    }
+
     #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
     pub struct Actor {
         #[serde(flatten)]
         pub obj: Object,
-        
+
         pub inbox: String,
         pub outbox: String,
     }
 
     #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
+    #[serde(rename_all = "camelCase")]
     pub struct Person {
         #[serde(flatten)]
         pub obj: Object,
 
         pub following: String,
         pub followers: String,
-        
+
         pub summary: String,
         pub inbox: String,
         pub outbox: String,
-        
+
         pub preferred_username: String,
         pub name: String,
-        
+
         pub public_key: Option<UserKey>,
     }
-    
+
     #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
     pub struct UserKey {
         pub id: String,
         pub owner: String,
-        
+
         #[serde(rename = "publicKeyPem")]
         pub public_key: String,
     }
 }
 
 pub mod api {
-    use serde::{Serialize, Deserialize};
     use super::*;
-    
+    use serde::{Deserialize, Serialize};
+
     // API will not really use actors so treat them as DB actors
     // until we require specificity
     pub type Actor = db::Actor;
+
+    #[derive(Serialize, Deserialize, Debug)]
+    pub struct CredentialApplication {
+        pub name: String,
+        pub scopes: String,
+        pub redirect_uris: Vec<String>,
+        pub client_id: String,
+        pub client_secret: String,
+    }
+
+    #[derive(Deserialize, Serialize, Debug)]
+    pub struct WebfingerLink {
+        pub rel: String,
+        #[serde(rename = "type")]
+        pub ty: Option<String>,
+        pub href: Option<String>,
+    }
+
+    #[derive(Deserialize, Serialize, Debug)]
+    pub struct WebfingerHit {
+        pub subject: String,
+        pub aliases: Vec<String>,
+        pub links: Vec<WebfingerLink>,
+    }
 
     #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
     pub struct Account {
@@ -133,26 +263,26 @@ pub mod api {
         pub username: String,
         pub acct: String,
         pub display_name: String,
-        
+
         pub locked: bool,
         pub bot: bool,
-        
+
         pub created_at: String,
         pub attribution_domains: Vec<String>,
-        
+
         pub note: String,
         pub url: String,
-        
+
         pub avatar: String,
         pub avatar_static: String,
         pub header: String,
         pub header_static: String,
-        
+
         pub followers_count: i64,
         pub following_count: i64,
         pub statuses_count: i64,
         pub last_status_at: Option<String>,
-        
+
         pub emojis: Vec<Emoji>,
         pub fields: Vec<CustomField>,
     }
@@ -277,11 +407,11 @@ pub mod api {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn ap_actor_to_db() {
         let domain = "https://example.com";
-        
+
         let ap = ap::Actor {
             obj: Object {
                 context: as_context(),
@@ -292,11 +422,14 @@ mod tests {
         };
 
         let db: db::Actor = ap.into();
-        
-        assert_eq!(db, db::Actor {
-            id: ObjectUri("https://example.com/users/sample".to_string()),
-            inbox: "https://example.com/users/sample/inbox".to_string(),
-            outbox: "https://example.com/users/sample/outbox".to_string(),
-        });
+
+        assert_eq!(
+            db,
+            db::Actor {
+                id: ObjectUri("https://example.com/users/sample".to_string()),
+                inbox: "https://example.com/users/sample/inbox".to_string(),
+                outbox: "https://example.com/users/sample/outbox".to_string(),
+            }
+        );
     }
 }

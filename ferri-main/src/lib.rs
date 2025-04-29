@@ -1,6 +1,6 @@
 pub mod ap;
 pub mod config;
-pub mod types_rewrite;
+pub mod types;
 
 use rand::{Rng, distributions::Alphanumeric};
 

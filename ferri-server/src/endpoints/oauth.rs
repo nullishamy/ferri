@@ -23,7 +23,7 @@ pub async fn authorize(
     // This will act as a token for the user, but we will in future say that it expires very shortly
     // and can only be used for obtaining an access token etc
     sqlx::query!(
-      r#"
+        r#"
         INSERT INTO auth (token, user_id)
         VALUES (?1, ?2)
       "#,
@@ -77,15 +77,19 @@ pub struct NewTokenRequest {
 
 #[post("/oauth/token", data = "<req>")]
 pub async fn new_token(req: Form<NewTokenRequest>, mut db: Connection<Db>) -> Json<Token> {
-    let oauth = sqlx::query!("
+    let oauth = sqlx::query!(
+        "
       SELECT o.*, a.*
       FROM oauth o
       INNER JOIN auth a ON a.token = ?2
       WHERE o.access_token = ?1
-    ", req.code, req.code)
-        .fetch_one(&mut **db)
-        .await
-        .unwrap();
+    ",
+        req.code,
+        req.code
+    )
+    .fetch_one(&mut **db)
+    .await
+    .unwrap();
 
     let access_token = main::gen_token(15);
 

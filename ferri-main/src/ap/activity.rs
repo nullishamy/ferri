@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::Sqlite;
 use std::fmt::Debug;
-use tracing::{event, Level};
+use tracing::{Level, event};
 
 #[derive(Debug, Clone)]
 pub enum ActivityType {
@@ -104,7 +104,7 @@ impl<'a> Outbox<'a> {
 
     pub async fn post<T: Serialize + Debug>(&self, activity: OutgoingActivity<T>) {
         event!(Level::INFO, ?activity, "activity in outbox");
-        
+
         let raw = RawActivity {
             context: "https://www.w3.org/ns/activitystreams".to_string(),
             id: activity.req.id.clone(),
@@ -127,9 +127,11 @@ impl<'a> Outbox<'a> {
             .await
             .unwrap();
 
-        event!(Level::DEBUG,
-               outbox_res, activity = activity.req.id,
-               "got response for outbox dispatch"
+        event!(
+            Level::DEBUG,
+            outbox_res,
+            activity = activity.req.id,
+            "got response for outbox dispatch"
         );
     }
 

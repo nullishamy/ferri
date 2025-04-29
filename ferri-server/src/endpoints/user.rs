@@ -1,16 +1,23 @@
-use main::ap;
-use rocket::{get, http::ContentType, serde::json::Json, State, Responder};
-use rocket_db_pools::Connection;
-use rocket::response::Redirect;
-use rocket::response::status::NotFound;
-
-use crate::{
-    Config,
-    Db,
-    types::{OrderedCollection, Person, UserKey, content},
+use rocket::{
+    Responder, State, get,
+    http::ContentType,
+    response::{Redirect, status::NotFound},
+    serde::json::Json,
 };
+use rocket_db_pools::Connection;
+use serde::{Deserialize, Serialize};
+
+use main::types::{Object, ObjectUri, ObjectUuid, ap, as_context, get};
 
 use super::activity_type;
+use crate::Db;
+
+#[derive(Serialize, Deserialize)]
+pub struct OrderedCollection {
+    ty: String,
+    total_items: i64,
+    ordered_items: Vec<String>,
+}
 
 #[get("/users/<_user>/inbox")]
 pub async fn inbox(_user: String) -> Json<OrderedCollection> {
@@ -31,11 +38,14 @@ pub async fn outbox(_user: String) -> Json<OrderedCollection> {
 }
 
 #[get("/users/<uuid>/followers")]
-pub async fn followers(mut db: Connection<Db>, uuid: &str) -> Result<Json<OrderedCollection>, NotFound<String>> {
-    let target = ap::User::from_id(uuid, &mut **db)
+pub async fn followers(
+    mut db: Connection<Db>,
+    uuid: &str,
+) -> Result<Json<OrderedCollection>, NotFound<String>> {
+    let target = main::ap::User::from_id(uuid, &mut **db)
         .await
         .map_err(|e| NotFound(e.to_string()))?;
-    
+
     let actor_id = target.actor_id();
 
     let followers = sqlx::query!(
@@ -60,11 +70,14 @@ pub async fn followers(mut db: Connection<Db>, uuid: &str) -> Result<Json<Ordere
 }
 
 #[get("/users/<uuid>/following")]
-pub async fn following(mut db: Connection<Db>, uuid: &str) -> Result<Json<OrderedCollection>, NotFound<String>> {
-    let target = ap::User::from_id(uuid, &mut **db)
+pub async fn following(
+    mut db: Connection<Db>,
+    uuid: &str,
+) -> Result<Json<OrderedCollection>, NotFound<String>> {
+    let target = main::ap::User::from_id(uuid, &mut **db)
         .await
         .map_err(|e| NotFound(e.to_string()))?;
-    
+
     let actor_id = target.actor_id();
 
     let following = sqlx::query!(
@@ -91,10 +104,11 @@ pub async fn following(mut db: Connection<Db>, uuid: &str) -> Result<Json<Ordere
 #[get("/users/<uuid>/posts/<post>")]
 pub async fn post(
     mut db: Connection<Db>,
-    config: &State<Config>,
+    helpers: &State<crate::Helpers>,
     uuid: &str,
     post: String,
-) -> (ContentType, Json<content::Post>) {
+) -> (ContentType, Json<ap::Post>) {
+    let config = &helpers.config;
     let post = sqlx::query!(
         r#"
         SELECT * FROM post WHERE id = ?1
@@ -107,11 +121,13 @@ pub async fn post(
 
     (
         activity_type(),
-        Json(content::Post {
-            context: "https://www.w3.org/ns/activitystreams".to_string(),
-            id: config.post_url(uuid, &post.id),
+        Json(ap::Post {
+            obj: Object {
+                context: as_context(),
+                id: ObjectUri(config.post_url(uuid, &post.id)),
+            },
             attributed_to: Some(config.user_url(uuid)),
-            ty: "Note".to_string(),
+            ty: ap::ActivityType::Note,
             content: post.content,
             ts: post.created_at,
             to: vec![config.followers_url(uuid)],
@@ -138,38 +154,17 @@ fn ap_ok<T, E>(t: T) -> Result<ActivityResponse<T>, E> {
 #[get("/users/<uuid>")]
 pub async fn user(
     mut db: Connection<Db>,
-    config: &State<Config>,
-    uuid: &str
-) -> Result<ActivityResponse<Json<Person>>, UserFetchError> {
+    uuid: &str,
+) -> Result<ActivityResponse<Json<ap::Person>>, UserFetchError> {
     if uuid == "amy" {
-        return Err(
-            UserFetchError::Moved(
-                Redirect::permanent("https://ferri.amy.mov/users/9b9d497b-2731-435f-a929-e609ca69dac9")
-            )
-        )
+        return Err(UserFetchError::Moved(Redirect::permanent(
+            "https://ferri.amy.mov/users/9b9d497b-2731-435f-a929-e609ca69dac9",
+        )));
     }
-    
-    let user = ap::User::from_id(uuid, &mut **db)
+
+    let user = get::user_by_id(ObjectUuid(uuid.to_string()), &mut db)
         .await
         .map_err(|e| UserFetchError::NotFound(NotFound(e.to_string())))?;
 
-    let person = Person {
-        context: "https://www.w3.org/ns/activitystreams".to_string(),
-        ty: "Person".to_string(),
-        id: config.user_url(user.id()),
-        name: user.username().to_string(),
-        preferred_username: user.display_name().to_string(),
-        followers: config.followers_url(user.id()),
-        following: config.following_url(user.id()),
-        summary: format!("ferri {}", user.username()),
-        inbox: config.inbox_url(user.id()),
-        outbox: config.outbox_url(user.id()),
-        public_key: Some(UserKey {
-            id: format!("https://ferri.amy.mov/users/{}#main-key", uuid),
-            owner: config.user_url(user.id()),
-            public_key: include_str!("../../../public.pem").to_string(),
-        }),
-    };
-    
-    ap_ok(Json(person))
+    ap_ok(Json(user.into()))
 }

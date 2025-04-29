@@ -12,7 +12,7 @@ use rsa::{
 
 use base64::prelude::*;
 use chrono::Utc;
-use tracing::{event, Level};
+use tracing::{Level, event};
 
 pub struct HttpClient {
     client: reqwest::Client,
@@ -61,7 +61,7 @@ impl RequestBuilder {
 
     pub async fn send(self) -> Result<Response, reqwest::Error> {
         event!(Level::DEBUG, ?self.inner, "sending an http request");
-        
+
         self.inner.send().await
     }
 

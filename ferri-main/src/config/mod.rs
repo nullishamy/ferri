@@ -14,7 +14,7 @@ impl Config {
     pub fn host(&self) -> &str {
         &self.server.host
     }
-    
+
     pub fn user_url(&self, user_uuid: &str) -> String {
         format!("{}/users/{}", self.host(), user_uuid)
     }
@@ -26,7 +26,7 @@ impl Config {
     pub fn followers_url(&self, user_uuid: &str) -> String {
         format!("{}/followers", self.user_url(user_uuid))
     }
-    
+
     pub fn following_url(&self, user_uuid: &str) -> String {
         format!("{}/following", self.user_url(user_uuid))
     }

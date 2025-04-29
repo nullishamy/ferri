@@ -1,24 +1,19 @@
+use crate::http_wrapper::HttpWrapper;
 use chrono::Local;
-use tracing::Instrument;
 use rocket::serde::json::serde_json;
 use rocket::{State, post};
 use rocket_db_pools::Connection;
-use sqlx::SqliteConnection;
 use sqlx::Sqlite;
+use sqlx::SqliteConnection;
+use tracing::Instrument;
+use tracing::{Level, debug, error, event, info, span, warn};
 use url::Url;
 use uuid::Uuid;
-use tracing::{event, span, Level, debug, warn, info, error};
-use crate::http_wrapper::HttpWrapper;
 
-use main::types_rewrite::{make, db, ObjectUuid, ObjectUri, self, ap};
+use crate::Db;
+use main::types::{DbError, ObjectUri, ObjectUuid, ap, db, make};
 
-use crate::{
-    Db,
-    http::HttpClient,
-    types::{content::Post, activity},
-};
-
-fn handle_delete_activity(activity: activity::DeleteActivity) {
+fn handle_delete_activity(activity: ap::DeleteActivity) {
     warn!(?activity, "unimplemented delete activity");
 }
 
@@ -48,10 +43,13 @@ async fn create_user(
     conn: impl sqlx::Executor<'_, Database = Sqlite>,
 ) {
     // HACK: Allow us to formulate a `user@host` username by assuming the actor is on the same host as the user
-    let url = Url::parse(&actor).unwrap();
+    let url = Url::parse(actor).unwrap();
     let host = url.host_str().unwrap();
-    info!("creating user '{}'@'{}' ({:#?})", user.preferred_username, host, user);
-    
+    info!(
+        "creating user '{}'@'{}' ({:#?})",
+        user.preferred_username, host, user
+    );
+
     let (acct, remote) = if host != "ferri.amy.mov" {
         (format!("{}@{}", user.preferred_username, host), true)
     } else {
@@ -87,7 +85,7 @@ async fn create_user(
 }
 
 async fn create_follow(
-    activity: &activity::FollowActivity,
+    activity: &ap::FollowActivity,
     conn: impl sqlx::Executor<'_, Database = Sqlite>,
 ) {
     sqlx::query!(
@@ -96,7 +94,7 @@ async fn create_follow(
             VALUES ( ?1, ?2, ?3 )
             ON CONFLICT(id) DO NOTHING;
         "#,
-        activity.id,
+        activity.obj.id.0,
         activity.actor,
         activity.object
     )
@@ -108,13 +106,13 @@ async fn create_follow(
 struct RemoteInfo {
     acct: String,
     web_url: String,
-    is_remote: bool,    
+    is_remote: bool,
 }
 
 fn get_remote_info(actor_url: &str, person: &ap::Person) -> RemoteInfo {
-    let url = Url::parse(&actor_url).unwrap();
+    let url = Url::parse(actor_url).unwrap();
     let host = url.host_str().unwrap();
-    
+
     let (acct, remote) = if host != "ferri.amy.mov" {
         (format!("{}@{}", person.preferred_username, host), true)
     } else {
@@ -126,27 +124,28 @@ fn get_remote_info(actor_url: &str, person: &ap::Person) -> RemoteInfo {
     RemoteInfo {
         acct: acct.to_string(),
         web_url: url,
-        is_remote: remote
+        is_remote: remote,
     }
 }
 
 async fn resolve_actor<'a>(
     actor_url: &str,
     http: &HttpWrapper<'a>,
-    conn: &mut SqliteConnection
-) -> Result<db::User, types_rewrite::DbError> {
+    conn: &mut SqliteConnection,
+) -> Result<db::User, DbError> {
     let person = {
-        let res = http.get_person(&actor_url).await;
+        let res = http.get_person(actor_url).await;
         if let Err(e) = res {
             error!("could not load user {}: {}", actor_url, e.to_string());
-            return Err(types_rewrite::DbError::FetchError(
-                format!("could not load user {}: {}", actor_url, e.to_string())
-            ))
+            return Err(DbError::FetchError(format!(
+                "could not load user {}: {}",
+                actor_url, e
+            )));
         }
 
         res.unwrap()
     };
-    
+
     let user_id = ObjectUuid::new();
     let remote_info = get_remote_info(actor_url, &person);
 
@@ -159,7 +158,7 @@ async fn resolve_actor<'a>(
     info!("creating actor {}", actor_url);
 
     let actor = make::new_actor(actor.clone(), conn).await.unwrap_or(actor);
-    
+
     info!("creating user {} ({:#?})", remote_info.acct, person);
 
     let user = db::User {
@@ -172,9 +171,7 @@ async fn resolve_actor<'a>(
         url: remote_info.web_url,
         created_at: main::ap::now(),
 
-        posts: db::UserPosts {
-            last_post_at: None
-        }
+        posts: db::UserPosts { last_post_at: None },
     };
 
     Ok(make::new_user(user.clone(), conn).await.unwrap_or(user))
@@ -182,25 +179,28 @@ async fn resolve_actor<'a>(
 
 async fn handle_follow_activity<'a>(
     followed_account: &str,
-    activity: activity::FollowActivity,
+    activity: ap::FollowActivity,
     http: HttpWrapper<'a>,
     mut db: Connection<Db>,
 ) {
-    let actor = resolve_actor(&activity.actor, &http, &mut **db)
-        .await.unwrap();
+    let actor = resolve_actor(&activity.actor, &http, &mut db)
+        .await
+        .unwrap();
 
     info!("{:?} follows {}", actor, followed_account);
-    
+
     create_follow(&activity, &mut **db).await;
 
     let follower = main::ap::User::from_actor_id(&activity.actor, &mut **db).await;
-    let followed = main::ap::User::from_id(&followed_account, &mut **db).await.unwrap();
+    let followed = main::ap::User::from_id(followed_account, &mut **db)
+        .await
+        .unwrap();
     let outbox = main::ap::Outbox::for_user(followed.clone(), http.client());
 
     let activity = main::ap::Activity {
         id: format!("https://ferri.amy.mov/activities/{}", Uuid::new_v4()),
         ty: main::ap::ActivityType::Accept,
-        object: activity.id,
+        object: activity.obj.id.0,
         ..Default::default()
     };
 
@@ -217,9 +217,9 @@ async fn handle_follow_activity<'a>(
     outbox.post(req).await;
 }
 
-async fn handle_like_activity(activity: activity::LikeActivity, mut db: Connection<Db>) {
+async fn handle_like_activity(activity: ap::LikeActivity, mut db: Connection<Db>) {
     warn!(?activity, "unimplemented like activity");
-    
+
     let target_post = sqlx::query!("SELECT * FROM post WHERE uri = ?1", activity.object)
         .fetch_one(&mut **db)
         .await;
@@ -232,48 +232,52 @@ async fn handle_like_activity(activity: activity::LikeActivity, mut db: Connecti
 }
 
 async fn handle_boost_activity<'a>(
-    activity: activity::BoostActivity,
+    activity: ap::BoostActivity,
     http: HttpWrapper<'a>,
     mut db: Connection<Db>,
 ) {
-    let key_id = "https://ferri.amy.mov/users/amy#main-key";
+    let key_id = "https://ferri.amy.mov/users/9b9d497b-2731-435f-a929-e609ca69dac9#main-key";
     dbg!(&activity);
     let post = http
         .client()
         .get(&activity.object)
         .activity()
-        .sign(&key_id)
+        .sign(key_id)
         .send()
         .await
         .unwrap()
         .text()
         .await
         .unwrap();
-    
+
     info!("{}", post);
-    
-    let post = serde_json::from_str::<Post>(&post);
+
+    let post = serde_json::from_str::<ap::Post>(&post);
     if let Err(e) = post {
         error!(?e, "when decoding post");
-        return
+        return;
     }
-    
+
     let post = post.unwrap();
 
     info!("{:#?}", post);
     let attribution = post.attributed_to.unwrap();
-    
+
     let post_user = http.get_person(&attribution).await;
     if let Err(e) = post_user {
-        error!("could not load post_user {}: {}", attribution, e.to_string());
-        return
+        error!(
+            "could not load post_user {}: {}",
+            attribution,
+            e.to_string()
+        );
+        return;
     }
     let post_user = post_user.unwrap();
 
     let user = http.get_person(&activity.actor).await;
     if let Err(e) = user {
         error!("could not load actor {}: {}", activity.actor, e.to_string());
-        return
+        return;
     }
     let user = user.unwrap();
 
@@ -288,52 +292,70 @@ async fn handle_boost_activity<'a>(
 
     debug!("creating user {}", attribution);
     create_user(&post_user, &attribution, &mut **db).await;
-    
+
     let attributed_user = main::ap::User::from_actor_id(&attribution, &mut **db).await;
     let actor_user = main::ap::User::from_actor_id(&activity.actor, &mut **db).await;
-    
+
     let base_id = main::ap::new_id();
     let now = main::ap::new_ts();
-    
+
     let reblog_id = main::ap::new_id();
 
     let attr_id = attributed_user.id();
     // HACK: ON CONFLICT is to avoid duplicate remote posts coming in
     //       check this better in future
-    sqlx::query!("
+    sqlx::query!(
+        "
        INSERT INTO post (id, uri, user_id, content, created_at)
        VALUES (?1, ?2, ?3, ?4, ?5)
        ON CONFLICT(uri) DO NOTHING
-    ", reblog_id, post.id, attr_id, post.content, post.ts)
-        .execute(&mut **db)
-        .await
-        .unwrap();
+    ",
+        reblog_id,
+        post.obj.id.0,
+        attr_id,
+        post.content,
+        post.ts
+    )
+    .execute(&mut **db)
+    .await
+    .unwrap();
 
-    let uri = format!("https://ferri.amy.mov/users/{}/posts/{}", actor_user.id(), base_id);
+    let uri = format!(
+        "https://ferri.amy.mov/users/{}/posts/{}",
+        actor_user.id(),
+        base_id
+    );
     let user_id = actor_user.id();
-    
-    sqlx::query!("
+
+    sqlx::query!(
+        "
        INSERT INTO post (id, uri, user_id, content, created_at, boosted_post_id)
        VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-    ", base_id, uri, user_id, "", now, reblog_id)
-        .execute(&mut **db)
-        .await
-        .unwrap();
-
+    ",
+        base_id,
+        uri,
+        user_id,
+        "",
+        now,
+        reblog_id
+    )
+    .execute(&mut **db)
+    .await
+    .unwrap();
 }
 
 async fn handle_create_activity<'a>(
-    activity: activity::CreateActivity,
+    activity: ap::CreateActivity,
     http: HttpWrapper<'a>,
     mut db: Connection<Db>,
 ) {
-    assert!(&activity.object.ty == "Note");
+    assert!(activity.object.ty == ap::ActivityType::Note);
     debug!("resolving user {}", activity.actor);
-    
+
     let user = http.get_person(&activity.actor).await;
     if let Err(e) = user {
         error!("could not load user {}: {}", activity.actor, e.to_string());
-        return
+        return;
     }
 
     let user = user.unwrap();
@@ -351,7 +373,7 @@ async fn handle_create_activity<'a>(
     let now = Local::now().to_rfc3339();
     let content = activity.object.content.clone();
     let post_id = Uuid::new_v4().to_string();
-    let uri = activity.id;
+    let uri = activity.obj.id.0;
 
     info!(post_id, "creating post");
 
@@ -366,52 +388,51 @@ async fn handle_create_activity<'a>(
         content,
         now
     )
-        .execute(&mut **db)
-        .await
-        .unwrap();
+    .execute(&mut **db)
+    .await
+    .unwrap();
 }
 
 #[post("/users/<user>/inbox", data = "<body>")]
-pub async fn inbox(db: Connection<Db>, http: &State<HttpClient>, user: &str, body: String) {
-    let min = serde_json::from_str::<activity::MinimalActivity>(&body).unwrap();
+pub async fn inbox(db: Connection<Db>, helpers: &State<crate::Helpers>, user: &str, body: String) {
+    debug!("body in inbox: {}", body);
+
+    let min = serde_json::from_str::<ap::MinimalActivity>(&body).unwrap();
     let inbox_span = span!(Level::INFO, "inbox-post", user_id = user);
 
     async move {
         event!(Level::INFO, ?min, "received an activity");
-        
-        let key_id = "https://ferri.amy.mov/users/amy#main-key";
-        let wrapper = HttpWrapper::new(http.inner(), key_id);
-        
-        match min.ty.as_str() {
-            "Delete" => {
-                let activity = serde_json::from_str::<activity::DeleteActivity>(&body).unwrap();
+
+        let key_id = "https://ferri.amy.mov/users/9b9d497b-2731-435f-a929-e609ca69dac9#main-key";
+        let wrapper = HttpWrapper::new(&helpers.http, key_id);
+
+        match min.ty {
+            ap::ActivityType::Delete => {
+                let activity = serde_json::from_str::<ap::DeleteActivity>(&body).unwrap();
                 handle_delete_activity(activity);
             }
-            "Follow" => {
-                let activity = serde_json::from_str::<activity::FollowActivity>(&body).unwrap();
+            ap::ActivityType::Follow => {
+                let activity = serde_json::from_str::<ap::FollowActivity>(&body).unwrap();
                 handle_follow_activity(user, activity, wrapper, db).await;
             }
-            "Create" => {
-                let activity = serde_json::from_str::<activity::CreateActivity>(&body).unwrap();
+            ap::ActivityType::Create => {
+                let activity = serde_json::from_str::<ap::CreateActivity>(&body).unwrap();
                 handle_create_activity(activity, wrapper, db).await;
             }
-            "Like" => {
-                let activity = serde_json::from_str::<activity::LikeActivity>(&body).unwrap();
+            ap::ActivityType::Like => {
+                let activity = serde_json::from_str::<ap::LikeActivity>(&body).unwrap();
                 handle_like_activity(activity, db).await;
             }
-            "Announce" => {
-                let activity = serde_json::from_str::<activity::BoostActivity>(&body).unwrap();
+            ap::ActivityType::Announce => {
+                let activity = serde_json::from_str::<ap::BoostActivity>(&body).unwrap();
                 handle_boost_activity(activity, wrapper, db).await;
             }
-            
-            act => {
-                warn!(act, body, "unknown activity");
-            }
+            ap::ActivityType::Note => todo!(),
+            ap::ActivityType::Accept => todo!(),
         }
-
-        debug!("body in inbox: {}", body);
     }
     // Allow the span to be used inside the async code
     // https://docs.rs/tracing/latest/tracing/span/struct.EnteredSpan.html#deref-methods-Span
-    .instrument(inbox_span).await;
+    .instrument(inbox_span)
+    .await;
 }
