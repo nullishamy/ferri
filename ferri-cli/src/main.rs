@@ -55,9 +55,9 @@ async fn main() {
             r#"
           INSERT INTO user (
             id, acct, url, remote, username,
-            actor_id, display_name, created_at
+            actor_id, display_name, created_at, icon_url
           )
-          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
         "#,
             "9b9d497b-2731-435f-a929-e609ca69dac9",
             "amy",
@@ -66,7 +66,8 @@ async fn main() {
             "amy",
             "https://ferri.amy.mov/users/9b9d497b-2731-435f-a929-e609ca69dac9",
             "amy",
-            ts
+            ts,
+            "https://ferri.amy.mov/assets/pfp.png"
         )
         .execute(&mut *conn)
         .await

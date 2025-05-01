@@ -35,11 +35,8 @@ pub struct TimelineStatus {
 #[get("/timelines/home")]
 pub async fn home(
     mut db: Connection<Db>,
-    helpers: &State<crate::Helpers>,
     _user: AuthenticatedUser,
 ) -> Json<Vec<TimelineStatus>> {
-    let config = &helpers.config;
-
     #[derive(sqlx::FromRow, Debug)]
     struct Post {
         is_boost_source: bool,
@@ -51,6 +48,8 @@ pub async fn home(
         boosted_post_id: Option<String>,
         display_name: String,
         username: String,
+        icon_url: String,
+        user_url: String
     }
 
     // FIXME: query! can't cope with this. returns a type error
@@ -75,7 +74,7 @@ pub async fn home(
            )
            SELECT is_boost_source, p.id as "post_id", u.id as "user_id",
                   p.content, p.uri as "post_uri", u.username, u.display_name,
-                  u.actor_id, p.created_at, p.boosted_post_id
+                  u.actor_id, p.created_at, p.boosted_post_id, u.icon_url, u.url as "user_url"
            FROM get_home_timeline_with_boosts
            JOIN post p ON p.id = get_home_timeline_with_boosts.id
            JOIN user u ON u.id = p.user_id;
@@ -90,7 +89,6 @@ pub async fn home(
     for record in posts.iter() {
         let mut boost: Option<Box<TimelineStatus>> = None;
         if let Some(ref boosted_id) = record.boosted_post_id {
-            let user_uri = config.user_url(&record.user_id);
             let record = posts.iter().find(|p| &p.post_id == boosted_id).unwrap();
 
             boost = Some(Box::new(TimelineStatus {
@@ -123,11 +121,11 @@ pub async fn home(
                     created_at: "2025-04-10T22:12:09Z".to_string(),
                     attribution_domains: vec![],
                     note: "".to_string(),
-                    url: user_uri,
-                    avatar: "https://ferri.amy.mov/assets/pfp.png".to_string(),
-                    avatar_static: "https://ferri.amy.mov/assets/pfp.png".to_string(),
-                    header: "https://ferri.amy.mov/assets/pfp.png".to_string(),
-                    header_static: "https://ferri.amy.mov/assets/pfp.png".to_string(),
+                    url: record.user_url.clone(),
+                    avatar: record.icon_url.clone(),
+                    avatar_static: record.icon_url.clone(),
+                    header: record.icon_url.clone(),
+                    header_static: record.icon_url.clone(),
                     followers_count: 1,
                     following_count: 1,
                     statuses_count: 1,
@@ -137,7 +135,6 @@ pub async fn home(
         }
 
         if !record.is_boost_source {
-            let user_uri = config.user_web_url(&record.username);
             out.push(TimelineStatus {
                 id: record.post_id.clone(),
                 created_at: record.created_at.clone(),
@@ -168,11 +165,11 @@ pub async fn home(
                     created_at: "2025-04-10T22:12:09Z".to_string(),
                     attribution_domains: vec![],
                     note: "".to_string(),
-                    url: user_uri,
-                    avatar: "https://ferri.amy.mov/assets/pfp.png".to_string(),
-                    avatar_static: "https://ferri.amy.mov/assets/pfp.png".to_string(),
-                    header: "https://ferri.amy.mov/assets/pfp.png".to_string(),
-                    header_static: "https://ferri.amy.mov/assets/pfp.png".to_string(),
+                    url: record.user_url.clone(),
+                    avatar: record.icon_url.clone(),
+                    avatar_static: record.icon_url.clone(),
+                    header: record.icon_url.clone(),
+                    header_static: record.icon_url.clone(),
                     followers_count: 1,
                     following_count: 1,
                     statuses_count: 1,

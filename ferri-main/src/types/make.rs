@@ -5,8 +5,9 @@ pub async fn new_user(user: db::User, conn: &mut SqliteConnection) -> Result<db:
     let ts = user.created_at.to_rfc3339();
     sqlx::query!(
         r#"
-      INSERT INTO user (id, acct, url, created_at, remote, username, actor_id, display_name)
-      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+      INSERT INTO user (id, acct, url, created_at, remote,
+                        username, actor_id, display_name, icon_url)
+      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
     "#,
         user.id.0,
         user.acct,
@@ -15,7 +16,8 @@ pub async fn new_user(user: db::User, conn: &mut SqliteConnection) -> Result<db:
         user.remote,
         user.username,
         user.actor.id.0,
-        user.display_name
+        user.display_name,
+        user.icon_url
     )
     .execute(conn)
     .await

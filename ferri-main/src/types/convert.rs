@@ -44,10 +44,10 @@ impl From<db::User> for api::Account {
             note: "".to_string(),
             url: val.url,
 
-            avatar: "https://ferri.amy.mov/assets/pfp.png".to_string(),
-            avatar_static: "https://ferri.amy.mov/assets/pfp.png".to_string(),
-            header: "https://ferri.amy.mov/assets/pfp.png".to_string(),
-            header_static: "https://ferri.amy.mov/assets/pfp.png".to_string(),
+            avatar: val.icon_url.clone(),
+            avatar_static: val.icon_url.clone(),
+            header: val.icon_url.clone(),
+            header_static: val.icon_url,
 
             followers_count: 0,
             following_count: 0,
@@ -79,6 +79,42 @@ impl From<db::User> for ap::Person {
                 owner: format!("https://ferri.amy.mov/users/{}", val.id.0),
                 public_key: include_str!("../../../public.pem").to_string(),
             }),
+            icon: None
         }
     }
 }
+
+impl From<db::Post> for api::Status {
+    fn from(value: db::Post) -> api::Status {
+        api::Status {
+            id: value.id,
+            created_at: value.created_at.to_rfc3339(),
+            in_reply_to_id: None,
+            in_reply_to_account_id: None,
+            sensitive: false,
+            spoiler_text: String::new(),
+            visibility: "Public".to_string(),
+            language: "en-GB".to_string(),
+            uri: value.uri.clone(),
+            url: value.uri.0.to_string(),
+            replies_count: 0,
+            reblogs_count: 0,
+            favourites_count: 0,
+            favourited: false,
+            reblogged: false,
+            muted: false,
+            bookmarked: false,
+            content: value.content,
+            reblog: None,
+            application: None,
+            account: value.user.into(),
+            media_attachments: vec![],
+            mentions: vec![],
+            tags: vec![],
+            emojis: vec![],
+            card: None,
+            poll: None
+        }
+    }
+}
+

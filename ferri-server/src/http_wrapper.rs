@@ -2,7 +2,7 @@ use crate::http::HttpClient;
 use main::types::ap;
 use std::fmt::Debug;
 use thiserror::Error;
-use tracing::{Level, error, event};
+use tracing::{Level, error, event, info};
 
 pub struct HttpWrapper<'a> {
     client: &'a HttpClient,
@@ -54,6 +54,7 @@ impl<'a> HttpWrapper<'a> {
         }
 
         let raw_body = raw_body.unwrap();
+        info!("raw body {}", raw_body);
         let decoded = serde_json::from_str::<T>(&raw_body);
 
         if let Err(e) = decoded {

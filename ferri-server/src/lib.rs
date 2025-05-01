@@ -5,7 +5,7 @@ use endpoints::{
 
 use tracing_subscriber::fmt;
 
-use main::ap;
+use main::{ap, types::{ObjectUri, ObjectUuid}};
 
 use main::ap::http;
 use main::config::Config;
@@ -36,9 +36,9 @@ async fn activity_endpoint(_activity: String) {}
 #[derive(Debug)]
 pub struct AuthenticatedUser {
     pub username: String,
-    pub id: String,
+    pub id: ObjectUuid,
     pub token: String,
-    pub actor_id: String,
+    pub actor_id: ObjectUri,
 }
 
 #[derive(Debug)]
@@ -72,9 +72,9 @@ impl<'a> FromRequest<'a> for AuthenticatedUser {
             if let Ok(auth) = auth {
                 return Outcome::Success(AuthenticatedUser {
                     token: auth.token,
-                    id: auth.id,
+                    id: ObjectUuid(auth.id),
                     username: auth.display_name,
-                    actor_id: auth.actor_id,
+                    actor_id: ObjectUri(auth.actor_id),
                 });
             }
         }
@@ -150,7 +150,10 @@ pub fn launch(cfg: Config) -> Rocket<Build> {
                 user_profile,
             ],
         )
-        .mount("/api/v2", routes![api::instance::instance])
+        .mount("/api/v2", routes![
+            api::instance::instance,
+            api::search::search,
+        ])
         .mount(
             "/api/v1",
             routes![

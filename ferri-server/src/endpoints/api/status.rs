@@ -43,7 +43,7 @@ async fn create_status(
     http: &HttpClient,
     status: &Status,
 ) -> TimelineStatus {
-    let user = ap::User::from_id(&user.id, &mut **db).await.unwrap();
+    let user = ap::User::from_id(&user.id.0, &mut **db).await.unwrap();
     let outbox = ap::Outbox::for_user(user.clone(), http);
 
     let post_id = ap::new_id();

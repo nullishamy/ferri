@@ -86,8 +86,19 @@ pub mod db {
         pub remote: bool,
         pub url: String,
         pub created_at: DateTime<Utc>,
+        pub icon_url: String,
 
         pub posts: UserPosts,
+    }
+
+    #[derive(Debug, Eq, PartialEq, Clone)]
+    pub struct Post {
+        pub id: ObjectUuid,
+        pub uri: ObjectUri,
+        pub user: User,
+        pub content: String,
+        pub created_at: DateTime<Utc>,
+        pub boosted_post: Option<ObjectUuid>
     }
 }
 
@@ -211,6 +222,25 @@ pub mod ap {
     }
 
     #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
+    pub enum IconType {
+        Image
+    }
+
+    #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
+    pub struct PersonIcon {
+        #[serde(rename = "type")]
+        pub ty: IconType,
+        pub url: String,
+
+        #[serde(default)]
+        pub summary: String,
+        #[serde(default)]
+        pub width: i64,
+        #[serde(default)]
+        pub height: i64
+    }
+
+    #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
     #[serde(rename_all = "camelCase")]
     pub struct Person {
         #[serde(flatten)]
@@ -227,6 +257,8 @@ pub mod ap {
         pub name: String,
 
         pub public_key: Option<UserKey>,
+
+        pub icon: Option<PersonIcon>
     }
 
     #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
@@ -271,6 +303,37 @@ pub mod api {
         pub links: Vec<WebfingerLink>,
     }
 
+    #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
+    pub struct Status {
+        pub id: ObjectUuid,
+        pub created_at: String,
+        pub in_reply_to_id: Option<ObjectUri>,
+        pub in_reply_to_account_id: Option<ObjectUri>,
+        pub sensitive: bool,
+        pub spoiler_text: String,
+        pub visibility: String,
+        pub language: String,
+        pub uri: ObjectUri,
+        pub url: String,
+        pub replies_count: i64,
+        pub reblogs_count: i64,
+        pub favourites_count: i64,
+        pub favourited: bool,
+        pub reblogged: bool,
+        pub muted: bool,
+        pub bookmarked: bool,
+        pub content: String,
+        pub reblog: Option<Box<Status>>,
+        pub application: Option<()>,
+        pub account: Account,
+        pub media_attachments: Vec<Option<()>>,
+        pub mentions: Vec<Option<()>>,
+        pub tags: Vec<Option<()>>,
+        pub emojis: Vec<Option<()>>,
+        pub card: Option<()>,
+        pub poll: Option<()>,
+    }
+        
     #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
     pub struct Account {
         pub id: ObjectUuid,

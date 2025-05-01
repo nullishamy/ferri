@@ -57,6 +57,9 @@ async fn create_user(
     };
 
     let url = format!("https://ferri.amy.mov/{}", acct);
+    let icon_url = user.icon.as_ref().map(|ic| ic.url.clone()).unwrap_or(
+        "https://ferri.amy.mov/assets/pfp.png".to_string()
+    );
 
     let uuid = Uuid::new_v4().to_string();
     // FIXME: Pull from user
@@ -65,10 +68,10 @@ async fn create_user(
         r#"
           INSERT INTO user (
             id, acct, url, remote, username,
-            actor_id, display_name, created_at
+            actor_id, display_name, created_at, icon_url
           )
-          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
-            ON CONFLICT(actor_id) DO NOTHING;
+          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+          ON CONFLICT(actor_id) DO NOTHING;
         "#,
         uuid,
         acct,
@@ -77,7 +80,8 @@ async fn create_user(
         user.preferred_username,
         actor,
         user.name,
-        ts
+        ts,
+        icon_url
     )
     .execute(conn)
     .await
@@ -170,6 +174,9 @@ async fn resolve_actor<'a>(
         remote: remote_info.is_remote,
         url: remote_info.web_url,
         created_at: main::ap::now(),
+        icon_url: person.icon.map(|ic| ic.url).unwrap_or(
+            "https://ferri.amy.mov/assets/pfp.png".to_string()
+        ),
 
         posts: db::UserPosts { last_post_at: None },
     };

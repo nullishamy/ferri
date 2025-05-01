@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS user
 	username TEXT NOT NULL,
 	actor_id TEXT NOT NULL UNIQUE,
 	display_name TEXT NOT NULL,
+	icon_url TEXT NOT NULL,
 
 	FOREIGN KEY(actor_id) REFERENCES actor(id)
 );

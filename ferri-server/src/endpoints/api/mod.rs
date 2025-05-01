@@ -4,3 +4,4 @@ pub mod preferences;
 pub mod status;
 pub mod timeline;
 pub mod user;
+pub mod search;

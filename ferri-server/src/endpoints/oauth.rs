@@ -6,7 +6,6 @@ use rocket::{
     FromForm,
     form::Form,
     get, post,
-    response::Redirect,
     response::status::BadRequest,
     response::content::RawHtml,
     serde::{Deserialize, Serialize, json::Json},
@@ -81,8 +80,7 @@ pub async fn authorize(
     client_id: &str,
     scope: &str,
     redirect_uri: &str,
-    response_type: &str,
-    mut db: Connection<Db>,
+    response_type: &str
 ) -> Result<RawHtml<String>, BadRequest<String>> {
     if response_type != "code" {
         error!("unknown response type {}", response_type);

@@ -66,7 +66,7 @@ pub async fn new_follow(
 ) -> Result<(), NotFound<String>> {
     let http = &helpers.http;
 
-    let follower = ap::User::from_actor_id(&user.actor_id, &mut **db).await;
+    let follower = ap::User::from_actor_id(&user.actor_id.0, &mut **db).await;
 
     let followed = ap::User::from_id(uuid, &mut **db)
         .await
