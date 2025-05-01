@@ -27,6 +27,12 @@ pub enum ObjectContext {
     Vec(Vec<serde_json::Value>),
 }
 
+impl Default for ObjectContext {
+    fn default() -> Self {
+        ObjectContext::Str(String::new())
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Clone)]
 pub struct ObjectUri(pub String);
 
@@ -48,6 +54,7 @@ impl ObjectUuid {
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
 pub struct Object {
     #[serde(rename = "@context")]
+    #[serde(default)]
     pub context: ObjectContext,
     pub id: ObjectUri,
 }
@@ -103,6 +110,8 @@ pub mod ap {
     pub struct MinimalActivity {
         #[serde(flatten)]
         pub obj: Object,
+
+        #[serde(rename = "type")]
         pub ty: ActivityType,
     }
 
@@ -123,6 +132,7 @@ pub mod ap {
         #[serde(flatten)]
         pub obj: Object,
 
+        #[serde(rename = "type")]
         pub ty: ActivityType,
 
         pub object: Post,
@@ -139,6 +149,7 @@ pub mod ap {
         #[serde(flatten)]
         pub obj: Object,
 
+        #[serde(rename = "type")]
         pub ty: ActivityType,
 
         pub object: String,
@@ -149,7 +160,8 @@ pub mod ap {
     pub struct AcceptActivity {
         #[serde(flatten)]
         pub obj: Object,
-
+        
+        #[serde(rename = "type")]
         pub ty: ActivityType,
 
         pub object: String,
@@ -161,6 +173,7 @@ pub mod ap {
         #[serde(flatten)]
         pub obj: Object,
 
+        #[serde(rename = "type")]
         pub ty: ActivityType,
 
         pub actor: String,
@@ -175,6 +188,7 @@ pub mod ap {
         #[serde(flatten)]
         pub obj: Object,
 
+        #[serde(rename = "type")]
         pub ty: ActivityType,
 
         #[serde(rename = "published")]

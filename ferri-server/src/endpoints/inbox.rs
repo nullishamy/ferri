@@ -327,6 +327,8 @@ async fn handle_boost_activity<'a>(
     );
     let user_id = actor_user.id();
 
+    info!("inserting post with id {} uri {}", base_id, uri);
+
     sqlx::query!(
         "
        INSERT INTO post (id, uri, user_id, content, created_at, boosted_post_id)

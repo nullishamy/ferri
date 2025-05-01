@@ -1,14 +1,28 @@
 use crate::types::{DbError, ObjectUri, ObjectUuid, db};
 use chrono::{DateTime, NaiveDateTime, Utc};
 use sqlx::SqliteConnection;
-use tracing::info;
+use tracing::{info, error};
 
 const SQLITE_TIME_FMT: &str = "%Y-%m-%d %H:%M:%S";
 
 fn parse_ts(ts: String) -> Option<DateTime<Utc>> {
-    NaiveDateTime::parse_from_str(&ts, SQLITE_TIME_FMT)
-        .ok()
-        .map(|nt| nt.and_utc())
+    // Depending on how the TS is queried it may be naive (so get it back to utc)
+    // or it may have a timezone associated with it
+    let dt = NaiveDateTime::parse_from_str(&ts, SQLITE_TIME_FMT)
+        .map(|ndt| {
+            ndt.and_utc()
+        })
+        .or_else(|_| {
+            DateTime::parse_from_rfc3339(&ts)
+                .map(|dt| dt.to_utc())
+        });
+    
+    if let Err(err) = dt {
+        error!("could not parse datetime {} ({}), db weirdness", ts, err);
+        return None
+    }
+        
+    Some(dt.unwrap())
 }
 
 pub async fn user_by_id(id: ObjectUuid, conn: &mut SqliteConnection) -> Result<db::User, DbError> {
@@ -59,9 +73,10 @@ pub async fn user_by_id(id: ObjectUuid, conn: &mut SqliteConnection) -> Result<d
     "#,
         record.user_id
     )
-    .fetch_one(&mut *conn)
+    .fetch_optional(&mut *conn)
     .await
     .map_err(|e| DbError::FetchError(e.to_string()))?
+    .flatten()
     .and_then(|ts| {
         info!("parsing timestamp {}", ts);
         parse_ts(ts)
