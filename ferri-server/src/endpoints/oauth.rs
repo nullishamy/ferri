@@ -1,23 +1,41 @@
 use crate::Db;
+use askama::Template;
+use tracing::error;
+
 use rocket::{
     FromForm,
     form::Form,
     get, post,
     response::Redirect,
+    response::status::BadRequest,
+    response::content::RawHtml,
     serde::{Deserialize, Serialize, json::Json},
 };
+
 use rocket_db_pools::Connection;
 
-#[get("/oauth/authorize?<client_id>&<scope>&<redirect_uri>&<response_type>")]
-pub async fn authorize(
-    client_id: &str,
-    scope: &str,
-    redirect_uri: &str,
-    response_type: &str,
+struct AuthorizeClient {
+    id: String
+}
+
+#[derive(Template)]
+#[template(path = "authorize.html")]
+struct AuthorizeTemplate {
+    client: AuthorizeClient,
+    scopes: Vec<String>,
+    scope_raw: String,
+    redirect_uri: String,
+    user_id: String
+}
+
+#[post("/oauth/accept?<id>&<client_id>&<scope>")]
+pub async fn accept(
     mut db: Connection<Db>,
-) -> Redirect {
-    // For now, we will always authorize the request and assign it to an admin user
-    let user_id = "9b9d497b-2731-435f-a929-e609ca69dac9";
+    id: &str,
+    client_id: &str,
+    scope: &str
+) -> RawHtml<String> {
+    let user_id = id;
     let code = main::gen_token(15);
 
     // This will act as a token for the user, but we will in future say that it expires very shortly
@@ -52,7 +70,38 @@ pub async fn authorize(
     .await
     .unwrap();
 
-    Redirect::temporary(format!("{}?code={}", redirect_uri, code))
+    // HACK: Until we are storing oauth stuff more properly we will hardcode phanpy
+    RawHtml(format!(r#"
+       <script>window.location.href="{}{}"</script>
+    "#, "https://phanpy.social?code=", code))
+}
+
+#[get("/oauth/authorize?<client_id>&<scope>&<redirect_uri>&<response_type>")]
+pub async fn authorize(
+    client_id: &str,
+    scope: &str,
+    redirect_uri: &str,
+    response_type: &str,
+    mut db: Connection<Db>,
+) -> Result<RawHtml<String>, BadRequest<String>> {
+    if response_type != "code" {
+        error!("unknown response type {}", response_type);
+        return Err(
+            BadRequest(format!("unknown response type {}", response_type))
+        )
+    }
+    
+    let tmpl = AuthorizeTemplate {
+        client: AuthorizeClient {
+            id: client_id.to_string()
+        },
+        scope_raw: scope.to_string(),
+        scopes: scope.split(" ").map(|s| s.to_string()).collect(),
+        redirect_uri: redirect_uri.to_string(),
+        user_id: "9b9d497b-2731-435f-a929-e609ca69dac9".to_string()
+    };
+
+    Ok(RawHtml(tmpl.render().unwrap()))
 }
 
 #[derive(Serialize, Deserialize, Debug)]

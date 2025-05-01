@@ -27,8 +27,8 @@ pub async fn new_app(
       VALUES (?1, ?2, ?3)
     "#,
         app.client_name,
-        app.scopes,
-        secret
+        secret,
+        app.scopes
     )
     .execute(&mut **db)
     .await

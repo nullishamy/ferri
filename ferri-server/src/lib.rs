@@ -140,6 +140,7 @@ pub fn launch(cfg: Config) -> Rocket<Build> {
                 user::following,
                 user::post,
                 oauth::authorize,
+                oauth::accept,
                 oauth::new_token,
                 cors::options_req,
                 activity_endpoint,
