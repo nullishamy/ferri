@@ -32,7 +32,7 @@ pub async fn handle_inbox_request(
 ) {
     match req {
         InboxRequest::Delete(_, _) => {
-            todo!()
+            warn!("unimplemented Delete");
         },
         InboxRequest::Follow { activity, followed, mut conn, outbound } => {
             let kid = key_id(&followed);

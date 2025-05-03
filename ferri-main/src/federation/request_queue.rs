@@ -46,22 +46,27 @@ impl RequestQueue {
         let fut = async move {
             info!("using config {:#?}, queue is up", config);
             let mut recv = self.recv;
-            let http = HttpClient::new();
 
             while let Some(req) = recv.recv().await {
                 info!(?req, "got a message into the queue");
+
+                // Spawn up a new task so that we can run concurrently and also so we can not die if it panics
+                tokio::spawn(async {
+                    let http = HttpClient::new();
+                    
+                    match req {
+                        QueueMessage::Heartbeat => {
+                            info!("heartbeat on queue");
+                        },
+                        QueueMessage::Inbound(inbox_request) => {
+                            handle_inbox_request(inbox_request, &http).await;
+                        },
+                        QueueMessage::Outbound(outbox_request) => {
+                            handle_outbox_request(outbox_request, &http).await;
+                        },
+                    }    
+                });
                 
-                match req {
-                    QueueMessage::Heartbeat => {
-                        info!("heartbeat on queue");
-                    },
-                    QueueMessage::Inbound(inbox_request) => {
-                        handle_inbox_request(inbox_request, &http).await;
-                    },
-                    QueueMessage::Outbound(outbox_request) => {
-                        handle_outbox_request(outbox_request, &http).await;
-                    },
-                }
             }
         }.instrument(span);
         

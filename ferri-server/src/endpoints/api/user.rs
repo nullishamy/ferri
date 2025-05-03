@@ -143,6 +143,7 @@ pub async fn statuses(
             FROM post p
             INNER JOIN user u on p.user_id = u.id
             WHERE u.id = ?1
+            ORDER BY p.created_at DESC
         "#, uid)
     .fetch_all(&mut **db)
     .await
