@@ -8,6 +8,7 @@ pub async fn new_user(user: db::User, conn: &mut SqliteConnection) -> Result<db:
       INSERT INTO user (id, acct, url, created_at, remote,
                         username, actor_id, display_name, icon_url)
       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+      ON CONFLICT(actor_id) DO NOTHING
     "#,
         user.id.0,
         user.acct,
@@ -34,6 +35,7 @@ pub async fn new_actor(
         r#"
       INSERT INTO actor (id, inbox, outbox)
       VALUES (?1, ?2, ?3)
+      ON CONFLICT(id) DO NOTHING
     "#,
         actor.id.0,
         actor.inbox,
@@ -45,3 +47,54 @@ pub async fn new_actor(
 
     Ok(actor)
 }
+
+pub async fn new_follow(
+    follow: db::Follow,
+    conn: &mut SqliteConnection,
+) -> Result<db::Follow, DbError> {
+    sqlx::query!(
+        r#"
+      INSERT INTO follow (id, follower_id, followed_id)
+      VALUES (?1, ?2, ?3)
+    "#,
+        follow.id.0,
+        follow.follower.0,
+        follow.follower.0,
+    )
+    .execute(conn)
+    .await
+    .map_err(|e| DbError::CreationError(e.to_string()))?;
+
+    Ok(follow)
+}
+
+
+pub async fn new_post(
+    post: db::Post,
+    conn: &mut SqliteConnection,
+) -> Result<db::Post, DbError> {
+    let ts = post.created_at.to_rfc3339();
+    let boosted = post.boosted_post.as_ref().map(|b| &b.0);
+    
+    sqlx::query!(
+        r#"
+      INSERT INTO post (id, uri, user_id, content, created_at, boosted_post_id)
+      VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+      ON CONFLICT(uri) DO NOTHING
+    "#,
+        post.id.0,
+        post.uri.0,
+        post.user.id.0,
+        post.content,
+        ts,
+        boosted
+        
+    )
+    .execute(conn)
+    .await
+    .map_err(|e| DbError::CreationError(e.to_string()))?;
+
+    Ok(post)
+}
+
+

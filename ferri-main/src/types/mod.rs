@@ -64,6 +64,13 @@ pub mod db {
     use chrono::{DateTime, Utc};
 
     #[derive(Debug, Eq, PartialEq, Clone)]
+    pub struct Follow {
+        pub id: ObjectUri,
+        pub follower: ObjectUri,
+        pub followed: ObjectUri,
+    }
+
+    #[derive(Debug, Eq, PartialEq, Clone)]
     pub struct Actor {
         pub id: ObjectUri,
         pub inbox: String,
@@ -105,12 +112,14 @@ pub mod db {
 pub mod ap {
     use super::*;
     use serde::{Deserialize, Serialize};
+    use url::Url;
 
     #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
     pub enum ActivityType {
         Create,
         Note,
         Delete,
+        Undo,
         Accept,
         Announce,
         Like,
@@ -259,6 +268,33 @@ pub mod ap {
         pub public_key: Option<UserKey>,
 
         pub icon: Option<PersonIcon>
+    }
+
+    pub struct RemoteInfo {
+        pub is_remote: bool,
+        pub web_url: String,
+        pub acct: String
+    }
+
+    impl Person {
+        pub fn remote_info(&self) -> RemoteInfo {
+            let url = Url::parse(&self.obj.id.0).unwrap();
+            let host = url.host_str().unwrap();
+
+            let (acct, remote) = if host != "ferri.amy.mov" {
+                (format!("{}@{}", self.preferred_username, host), true)
+            } else {
+                (self.preferred_username.clone(), false)
+            };
+
+            let url = format!("https://ferri.amy.mov/{}", acct);
+
+            RemoteInfo {
+                acct: acct.to_string(),
+                web_url: url,
+                is_remote: remote,
+            }
+        }
     }
 
     #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]

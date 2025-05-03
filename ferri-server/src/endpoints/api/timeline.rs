@@ -1,6 +1,6 @@
 use crate::{AuthenticatedUser, Db, endpoints::api::user::CredentialAcount};
 use rocket::{
-    State, get,
+    get,
     serde::{Deserialize, Serialize, json::Json},
 };
 use rocket_db_pools::Connection;

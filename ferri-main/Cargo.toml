@@ -17,3 +17,4 @@ serde_json = { workspace = true }
 base64 = "0.22.1"
 rsa = { version = "0.9.8", features = ["sha2"] }
 url = "2.5.4"
+tokio = "1.44.2"

@@ -59,7 +59,7 @@ pub async fn search(
                 }
             };
 
-            let user = get::user_by_actor_uri(person.unwrap().obj.id, &mut **db)
+            let user = get::user_by_actor_uri(person.unwrap().obj.id, &mut db)
                 .await
                 .unwrap();
 
@@ -67,7 +67,7 @@ pub async fn search(
         },
         SearchType::Statuses => {
             if q == "me" {
-                let st = get::posts_for_user_id(user.id, &mut **db)
+                let st = get::posts_for_user_id(user.id, &mut db)
                     .await
                     .unwrap();
 

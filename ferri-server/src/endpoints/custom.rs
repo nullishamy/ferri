@@ -81,7 +81,7 @@ pub async fn resolve_user(acct: &str, host: &str) -> ap::Person {
 #[get("/test")]
 pub async fn test(outbound: &State<OutboundQueue>, mut db: Connection<Db>) -> &'static str {
     use main::types::{ObjectUuid, api, get};
-    outbound.0.send(main::ap::QueueMessage::Heartbeat);
+    outbound.0.send(main::federation::QueueMessage::Heartbeat).await;
 
     let id = ObjectUuid("9b9d497b-2731-435f-a929-e609ca69dac9".to_string());
     let user = dbg!(get::user_by_id(id, &mut db).await.unwrap());

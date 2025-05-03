@@ -5,7 +5,7 @@ use endpoints::{
 
 use tracing_subscriber::fmt;
 
-use main::{ap, types::{ObjectUri, ObjectUuid}};
+use main::{federation, types::{ObjectUri, ObjectUuid}};
 
 use main::ap::http;
 use main::config::Config;
@@ -83,8 +83,8 @@ impl<'a> FromRequest<'a> for AuthenticatedUser {
     }
 }
 
-pub struct OutboundQueue(pub ap::QueueHandle);
-pub struct InboundQueue(pub ap::QueueHandle);
+pub struct OutboundQueue(pub federation::QueueHandle);
+pub struct InboundQueue(pub federation::QueueHandle);
 
 pub struct Helpers {
     http: http::HttpClient,
@@ -106,11 +106,11 @@ pub fn launch(cfg: Config) -> Rocket<Build> {
         .with_writer(std::io::stdout)
         .init();
 
-    let outbound = ap::RequestQueue::new("outbound");
-    let outbound_handle = outbound.spawn();
+    let outbound = federation::RequestQueue::new("outbound");
+    let outbound_handle = outbound.spawn(cfg.clone());
 
-    let inbound = ap::RequestQueue::new("inbound");
-    let inbound_handle = inbound.spawn();
+    let inbound = federation::RequestQueue::new("inbound");
+    let inbound_handle = inbound.spawn(cfg.clone());
 
     build()
         .manage(Helpers {
