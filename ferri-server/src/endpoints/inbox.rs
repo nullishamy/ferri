@@ -83,7 +83,7 @@ pub async fn inbox(
             ap::ActivityType::Announce => {
                 let activity = deser::<ap::BoostActivity>(&body);
                 let msg = QueueMessage::Inbound(
-                    InboxRequest::Boost(activity, user)
+                    InboxRequest::Boost(activity, user, conn)
                 );
                 
                 queue.0.send(msg).await;

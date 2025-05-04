@@ -68,6 +68,28 @@ pub async fn new_follow(
     Ok(follow)
 }
 
+pub async fn new_attachment(
+    attachment: db::Attachment,
+    conn: &mut SqliteConnection
+) -> Result<db::Attachment, DbError> {
+    sqlx::query!(
+        r#"
+      INSERT INTO attachment (id, post_id, url, media_type, marked_sensitive, alt)
+      VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+    "#,
+        attachment.id.0,
+        attachment.post_id.0,
+        attachment.url,
+        attachment.media_type,
+        attachment.sensitive,
+        attachment.alt
+    )
+    .execute(conn)
+    .await
+    .map_err(|e| DbError::CreationError(e.to_string()))?;
+
+    Ok(attachment)
+}
 
 pub async fn new_post(
     post: db::Post,
@@ -88,11 +110,14 @@ pub async fn new_post(
         post.content,
         ts,
         boosted
-        
     )
-    .execute(conn)
-    .await
-    .map_err(|e| DbError::CreationError(e.to_string()))?;
+        .execute(&mut *conn)
+        .await
+        .map_err(|e| DbError::CreationError(e.to_string()))?;
+
+    for attachment in post.attachments.clone() {
+        new_attachment(attachment, &mut *conn).await?;
+    }
 
     Ok(post)
 }

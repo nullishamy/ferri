@@ -207,8 +207,29 @@ pub async fn posts_for_user_id(
         .fetch_all(&mut *conn)
         .await
         .unwrap();
-    
+
     for record in posts {
+        let attachments = sqlx::query!(
+            "SELECT * FROM attachment WHERE post_id = ?",
+            record.post_id
+        )
+            .fetch_all(&mut *conn)
+            .await
+            .unwrap();
+
+        let attachments = attachments.into_iter()
+            .map(|at| {
+                db::Attachment {
+                    id: ObjectUuid(at.id),
+                    post_id: ObjectUuid(at.post_id),
+                    url: at.url,
+                    media_type: Some(at.media_type),
+                    sensitive: at.marked_sensitive,
+                    alt: at.alt
+                }
+            })
+            .collect::<Vec<_>>();
+        
         let user_created = parse_ts(record.user_created)
             .expect("no db corruption");
         
@@ -233,6 +254,7 @@ pub async fn posts_for_user_id(
                     last_post_at: None
                 }
             },
+            attachments,
             content: record.content,
             created_at: parse_ts(record.post_created).unwrap(),
             boosted_post: None

@@ -1,4 +1,5 @@
 use crate::{AuthenticatedUser, Db, endpoints::api::user::CredentialAcount};
+use main::types::ObjectUuid;
 use rocket::{
     get,
     serde::{Deserialize, Serialize, json::Json},
@@ -6,6 +7,16 @@ use rocket::{
 use rocket_db_pools::Connection;
 
 pub type TimelineAccount = CredentialAcount;
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(crate = "rocket::serde")]
+pub struct TimelineStatusAttachment {
+    id: ObjectUuid,
+    #[serde(rename = "type")]
+    ty: String,
+    url: String,
+    description: String
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(crate = "rocket::serde")]
@@ -28,14 +39,14 @@ pub struct TimelineStatus {
     pub muted: bool,
     pub bookmarked: bool,
     pub reblog: Option<Box<TimelineStatus>>,
-    pub media_attachments: Vec<()>,
+    pub media_attachments: Vec<TimelineStatusAttachment>,
     pub account: TimelineAccount,
 }
 
 #[get("/timelines/home")]
 pub async fn home(
     mut db: Connection<Db>,
-    _user: AuthenticatedUser,
+    user: AuthenticatedUser,
 ) -> Json<Vec<TimelineStatus>> {
     #[derive(sqlx::FromRow, Debug)]
     struct Post {
@@ -80,7 +91,7 @@ pub async fn home(
            JOIN user u ON u.id = p.user_id;
         "#,
     )
-    .bind("https://ferri.amy.mov/users/9b9d497b-2731-435f-a929-e609ca69dac9")
+    .bind(user.actor_id.0)
     .fetch_all(&mut **db)
     .await
     .unwrap();
@@ -90,6 +101,23 @@ pub async fn home(
         let mut boost: Option<Box<TimelineStatus>> = None;
         if let Some(ref boosted_id) = record.boosted_post_id {
             let record = posts.iter().find(|p| &p.post_id == boosted_id).unwrap();
+            let attachments = sqlx::query!(
+                "SELECT * FROM attachment WHERE post_id = ?1",
+                boosted_id
+            )
+                .fetch_all(&mut **db)
+                .await
+                .unwrap()
+                .into_iter()
+                .map(|at| {
+                    TimelineStatusAttachment {
+                        id: ObjectUuid(at.id),
+                        url: at.url,
+                        ty: "image".to_string(),
+                        description: at.alt.unwrap_or(String::new())
+                    }
+                })
+                .collect::<Vec<_>>();
 
             boost = Some(Box::new(TimelineStatus {
                 id: record.post_id.clone(),
@@ -110,7 +138,7 @@ pub async fn home(
                 reblog: boost,
                 muted: false,
                 bookmarked: false,
-                media_attachments: vec![],
+                media_attachments: attachments,
                 account: CredentialAcount {
                     id: record.user_id.clone(),
                     username: record.username.clone(),
@@ -134,6 +162,7 @@ pub async fn home(
             }))
         }
 
+        // Don't send the empty boost source posts
         if !record.is_boost_source {
             out.push(TimelineStatus {
                 id: record.post_id.clone(),

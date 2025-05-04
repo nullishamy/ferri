@@ -126,6 +126,7 @@ pub async fn post(
                 context: as_context(),
                 id: ObjectUri(config.post_url(uuid, &post.id)),
             },
+            attachment: vec![],
             attributed_to: Some(config.user_url(uuid)),
             ty: ap::ActivityType::Note,
             content: post.content,

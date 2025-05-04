@@ -75,6 +75,10 @@ impl<'a> HttpWrapper<'a> {
         self.get("Person", url).await
     }
 
+    pub async fn get_note(&self, url: &str) -> Result<ap::Post, HttpError> {
+        self.get("Note", url).await
+    }
+
     pub async fn post_activity<T : Serialize + Debug>(
         &self,
         inbox: &str,

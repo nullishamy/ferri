@@ -99,13 +99,24 @@ pub mod db {
     }
 
     #[derive(Debug, Eq, PartialEq, Clone)]
+    pub struct Attachment {
+        pub id: ObjectUuid,
+        pub post_id: ObjectUuid,
+        pub url: String,
+        pub media_type: Option<String>,
+        pub sensitive: bool,
+        pub alt: Option<String>
+    }
+
+    #[derive(Debug, Eq, PartialEq, Clone)]
     pub struct Post {
         pub id: ObjectUuid,
         pub uri: ObjectUri,
         pub user: User,
         pub content: String,
         pub created_at: DateTime<Utc>,
-        pub boosted_post: Option<ObjectUuid>
+        pub boosted_post: Option<ObjectUuid>,
+        pub attachments: Vec<Attachment>
     }
 }
 
@@ -204,6 +215,25 @@ pub mod ap {
     }
 
     #[derive(Serialize, Deserialize, Debug)]
+    pub enum PostAttachmentType {
+        Document
+    }
+
+    #[derive(Serialize, Deserialize, Debug)]
+    #[serde(rename_all = "camelCase")]
+    pub struct PostAttachment {
+        #[serde(rename = "type")]
+        pub ty: PostAttachmentType,
+        
+        pub media_type: String,
+        pub url: String,
+        pub name: String,
+        pub summary: Option<String>,
+        #[serde(default)]
+        pub sensitive: bool
+    }
+
+    #[derive(Serialize, Deserialize, Debug)]
     pub struct Post {
         #[serde(flatten)]
         pub obj: Object,
@@ -216,6 +246,8 @@ pub mod ap {
         pub content: String,
         pub to: Vec<String>,
         pub cc: Vec<String>,
+
+        pub attachment: Vec<PostAttachment>,
 
         #[serde(rename = "attributedTo")]
         pub attributed_to: Option<String>,
