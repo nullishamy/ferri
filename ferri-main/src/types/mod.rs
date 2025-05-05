@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::fmt::Debug;
 use thiserror::Error;
 use uuid::Uuid;
@@ -6,6 +6,15 @@ use uuid::Uuid;
 pub mod convert;
 pub mod get;
 pub mod make;
+
+fn deserialize_null_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+where
+    T: Default + Deserialize<'de>,
+    D: Deserializer<'de>,
+{
+    let opt = Option::deserialize(deserializer)?;
+    Ok(opt.unwrap_or_default())
+}
 
 #[derive(Debug, Error)]
 pub enum DbError {
@@ -115,7 +124,7 @@ pub mod db {
         pub user: User,
         pub content: String,
         pub created_at: DateTime<Utc>,
-        pub boosted_post: Option<ObjectUuid>,
+        pub boosted_post: Option<Box<Post>>,
         pub attachments: Vec<Attachment>
     }
 }
@@ -127,12 +136,14 @@ pub mod ap {
 
     #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
     pub enum ActivityType {
+        Reject,
         Create,
         Note,
         Delete,
         Undo,
         Accept,
         Announce,
+        Person,
         Like,
         Follow,
     }
@@ -227,7 +238,9 @@ pub mod ap {
         
         pub media_type: String,
         pub url: String,
+        #[serde(deserialize_with = "deserialize_null_default")]
         pub name: String,
+        
         pub summary: Option<String>,
         #[serde(default)]
         pub sensitive: bool
@@ -286,6 +299,9 @@ pub mod ap {
     pub struct Person {
         #[serde(flatten)]
         pub obj: Object,
+
+        #[serde(rename = "type")]
+        pub ty: ActivityType,
 
         pub following: String,
         pub followers: String,
@@ -372,6 +388,16 @@ pub mod api {
     }
 
     #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
+    pub struct StatusAttachment {
+        pub id: ObjectUuid,
+        #[serde(rename = "type")]
+        pub ty: String,
+        
+        pub url: String,
+        pub description: String
+    }
+
+    #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
     pub struct Status {
         pub id: ObjectUuid,
         pub created_at: String,
@@ -394,7 +420,7 @@ pub mod api {
         pub reblog: Option<Box<Status>>,
         pub application: Option<()>,
         pub account: Account,
-        pub media_attachments: Vec<Option<()>>,
+        pub media_attachments: Vec<StatusAttachment>,
         pub mentions: Vec<Option<()>>,
         pub tags: Vec<Option<()>>,
         pub emojis: Vec<Option<()>>,

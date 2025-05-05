@@ -96,7 +96,7 @@ pub async fn new_post(
     conn: &mut SqliteConnection,
 ) -> Result<db::Post, DbError> {
     let ts = post.created_at.to_rfc3339();
-    let boosted = post.boosted_post.as_ref().map(|b| &b.0);
+    let boosted = post.boosted_post.as_ref().map(|b| &b.id.0);
     
     sqlx::query!(
         r#"

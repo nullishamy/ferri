@@ -4,6 +4,8 @@ use crate::types::db;
 
 use crate::types::{Object, ObjectUri, as_context};
 
+use super::ap::ActivityType;
+
 impl From<db::Actor> for ap::Actor {
     fn from(val: db::Actor) -> ap::Actor {
         ap::Actor {
@@ -67,6 +69,7 @@ impl From<db::User> for ap::Person {
                 context: as_context(),
                 id: ObjectUri(format!("https://ferri.amy.mov/users/{}", val.id.0)),
             },
+            ty: ActivityType::Person,
             following: format!("https://ferri.amy.mov/users/{}/following", val.id.0),
             followers: format!("https://ferri.amy.mov/users/{}/followers", val.id.0),
             summary: format!("ferri {}", val.username),
@@ -105,10 +108,23 @@ impl From<db::Post> for api::Status {
             muted: false,
             bookmarked: false,
             content: value.content,
-            reblog: None,
+            reblog: value.boosted_post.map(|p| {
+                // Probably a better way to do this without reboxing but whatever...
+                let p: db::Post = *p;
+                let p: api::Status = p.into();
+                Box::new(p)
+            }),
             application: None,
             account: value.user.into(),
-            media_attachments: vec![],
+            media_attachments: value.attachments
+                .into_iter()
+                .map(|at| api::StatusAttachment {
+                    id: at.id,
+                    ty: "image".to_string(),
+                    url: at.url,
+                    description: at.alt.unwrap_or(String::new())
+                })
+                .collect(),
             mentions: vec![],
             tags: vec![],
             emojis: vec![],

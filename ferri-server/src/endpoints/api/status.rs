@@ -1,5 +1,4 @@
-use crate::timeline::TimelineStatus;
-use main::ap::{self, http::HttpClient};
+use main::{config::Config, federation::{outbox::OutboxRequest, QueueMessage}, types::{api, make, ObjectUri, ObjectUuid}};
 use rocket::{
     FromForm, State,
     form::Form,
@@ -7,22 +6,15 @@ use rocket::{
     serde::{Deserialize, Serialize, json::Json},
 };
 use rocket_db_pools::Connection;
-use uuid::Uuid;
+use main::types::db;
 
-use crate::api::user::CredentialAcount;
-use crate::{AuthenticatedUser, Db};
-
-#[derive(Serialize, Deserialize, Debug, FromForm)]
-#[serde(crate = "rocket::serde")]
-pub struct Status {
-    status: String,
-}
+use crate::{AuthenticatedUser, Db, OutboundQueue};
 
 #[derive(Serialize, Deserialize, Debug, FromForm)]
 #[serde(crate = "rocket::serde")]
 pub struct StatusContext {
-    ancestors: Vec<Status>,
-    descendants: Vec<Status>,
+    ancestors: Vec<CreateStatus>,
+    descendants: Vec<CreateStatus>,
 }
 
 #[get("/statuses/<_status>/context")]
@@ -37,114 +29,64 @@ pub async fn status_context(
     })
 }
 
-async fn create_status(
-    user: AuthenticatedUser,
-    mut db: Connection<Db>,
-    http: &HttpClient,
-    status: &Status,
-) -> TimelineStatus {
-    let user = ap::User::from_id(&user.id.0, &mut **db).await.unwrap();
-    let outbox = ap::Outbox::for_user(user.clone(), http);
+#[derive(Serialize, Deserialize, Debug, FromForm)]
+#[serde(crate = "rocket::serde")]
+pub struct CreateStatus {
+    status: String,
+}
 
-    let post_id = ap::new_id();
-    let now = ap::now();
-
-    let post = ap::Post::from_parts(post_id, status.status.clone(), user.clone())
-        .to(format!("{}/followers", user.uri()))
-        .cc("https://www.w3.org/ns/activitystreams#Public".to_string());
-
-    post.save(&mut **db).await;
-
-    let actor = sqlx::query!(
-        "SELECT * FROM actor WHERE id = ?1",
-        "https://fedi.amy.mov/users/9zkygethkdw60001"
-    )
-    .fetch_one(&mut **db)
-    .await
-    .unwrap();
-
-    let create_id = format!("https://ferri.amy.mov/activities/{}", Uuid::new_v4());
-
-    let activity = ap::Activity {
-        id: create_id,
-        ty: ap::ActivityType::Create,
-        object: post.clone().to_ap(),
-        to: vec![format!("{}/followers", user.uri())],
-        published: now,
-        cc: vec!["https://www.w3.org/ns/activitystreams#Public".to_string()],
-        ..Default::default()
-    };
-
-    let actor = ap::Actor::from_raw(actor.id.clone(), actor.inbox.clone(), actor.outbox.clone());
-
-    let req = ap::OutgoingActivity {
-        req: activity,
-        signed_by: format!("{}#main-key", user.uri()),
-        to: actor,
-    };
-
-    req.save(&mut **db).await;
-    outbox.post(req).await;
-
-    TimelineStatus {
-        id: post.id().to_string(),
-        created_at: post.created_at(),
-        in_reply_to_id: None,
-        in_reply_to_account_id: None,
-        content: post.content().to_string(),
-        visibility: "public".to_string(),
-        spoiler_text: "".to_string(),
-        sensitive: false,
-        uri: post.uri(),
-        url: post.uri(),
-        replies_count: 0,
-        reblogs_count: 0,
-        favourites_count: 0,
-        favourited: false,
-        reblogged: false,
-        reblog: None,
-        muted: false,
-        bookmarked: false,
-        media_attachments: vec![],
-        account: CredentialAcount {
-            id: user.id().to_string(),
-            username: user.username().to_string(),
-            acct: user.username().to_string(),
-            display_name: user.display_name().to_string(),
-            locked: false,
-            bot: false,
-            created_at: "2025-04-10T22:12:09Z".to_string(),
-            attribution_domains: vec![],
-            note: "".to_string(),
-            url: user.uri(),
-            avatar: "https://ferri.amy.mov/assets/pfp.png".to_string(),
-            avatar_static: "https://ferri.amy.mov/assets/pfp.png".to_string(),
-            header: "https://ferri.amy.mov/assets/pfp.png".to_string(),
-            header_static: "https://ferri.amy.mov/assets/pfp.png".to_string(),
-            followers_count: 1,
-            following_count: 1,
-            statuses_count: 1,
-            last_status_at: "2025-04-10T22:14:34Z".to_string(),
-        },
+fn to_db_post(req: &CreateStatus, user: &AuthenticatedUser, config: &Config) -> db::Post {
+    let post_id = main::new_id();
+    
+    db::Post {
+        id: ObjectUuid(post_id.clone()),
+        uri: ObjectUri(config.post_url(&user.id.0, &post_id)),
+        user: user.user.clone(),
+        content: req.status.clone(),
+        created_at: main::ap::now(),
+        boosted_post: None,
+        attachments: vec![]
     }
 }
 
 #[post("/statuses", data = "<status>")]
 pub async fn new_status(
-    db: Connection<Db>,
+    mut db: Connection<Db>,
     helpers: &State<crate::Helpers>,
-    status: Form<Status>,
+    status: Form<CreateStatus>,
     user: AuthenticatedUser,
-) -> Json<TimelineStatus> {
-    Json(create_status(user, db, &helpers.http, &status).await)
-}
+) -> Json<api::Status> {
+    let post = make::new_post(
+        to_db_post(&status, &user, &helpers.config),
+        &mut **db
+    )
+        .await
+        .unwrap();
+
+    Json(post.into())
+} 
 
 #[post("/statuses", data = "<status>", rank = 2)]
 pub async fn new_status_json(
-    db: Connection<Db>,
+    mut db: Connection<Db>,
     helpers: &State<crate::Helpers>,
-    status: Json<Status>,
+    outbound: &State<OutboundQueue>,
+    status: Json<CreateStatus>,
     user: AuthenticatedUser,
-) -> Json<TimelineStatus> {
-    Json(create_status(user, db, &helpers.http, &status).await)
+) -> Json<api::Status> {
+    let post = make::new_post(
+        to_db_post(&status, &user, &helpers.config),
+        &mut **db
+    )
+        .await
+        .unwrap();
+
+
+    let key_id = "https://ferri.amy.mov/users/9b9d497b-2731-435f-a929-e609ca69dac9#main-key";
+    outbound.0.send(QueueMessage::Outbound(
+        OutboxRequest::Status(post.clone(), key_id.to_string()))
+    )
+    .await;
+    
+    Json(post.into())
 }

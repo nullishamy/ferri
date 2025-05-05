@@ -187,6 +187,34 @@ pub async fn user_by_actor_uri(uri: ObjectUri, conn: &mut SqliteConnection) -> R
     })
 }
 
+pub async fn attachments_for_post(
+    post_id: ObjectUuid,
+    conn: &mut SqliteConnection
+)-> Result<Vec<db::Attachment>, DbError> {
+    let attachments = sqlx::query!(
+        "SELECT * FROM attachment WHERE post_id = ?",
+        post_id.0
+    )
+        .fetch_all(&mut *conn)
+        .await
+        .unwrap();
+
+    let attachments = attachments.into_iter()
+        .map(|at| {
+            db::Attachment {
+                id: ObjectUuid(at.id),
+                post_id: ObjectUuid(at.post_id),
+                url: at.url,
+                media_type: Some(at.media_type),
+                sensitive: at.marked_sensitive,
+                alt: at.alt
+            }
+        })
+        .collect::<Vec<_>>();
+    
+    Ok(attachments)
+}
+
 pub async fn posts_for_user_id(
     id: ObjectUuid,
     conn: &mut SqliteConnection
@@ -209,26 +237,9 @@ pub async fn posts_for_user_id(
         .unwrap();
 
     for record in posts {
-        let attachments = sqlx::query!(
-            "SELECT * FROM attachment WHERE post_id = ?",
-            record.post_id
-        )
-            .fetch_all(&mut *conn)
+        let attachments = attachments_for_post(ObjectUuid(record.post_id.clone()), conn)
             .await
             .unwrap();
-
-        let attachments = attachments.into_iter()
-            .map(|at| {
-                db::Attachment {
-                    id: ObjectUuid(at.id),
-                    post_id: ObjectUuid(at.post_id),
-                    url: at.url,
-                    media_type: Some(at.media_type),
-                    sensitive: at.marked_sensitive,
-                    alt: at.alt
-                }
-            })
-            .collect::<Vec<_>>();
         
         let user_created = parse_ts(record.user_created)
             .expect("no db corruption");
@@ -259,6 +270,123 @@ pub async fn posts_for_user_id(
             created_at: parse_ts(record.post_created).unwrap(),
             boosted_post: None
         })
+    }
+
+    Ok(out)
+}
+
+pub async fn home_timeline(
+    actor: ObjectUri,
+    conn: &mut SqliteConnection
+) -> Result<Vec<db::Post>, DbError> {
+    #[derive(sqlx::FromRow, Debug, Clone)]
+    struct Post {
+        is_boost_source: bool,
+        post_id: String,
+        user_id: String,
+        post_uri: String,
+        content: String,
+        post_created: String,
+        user_created: String,
+        actor_id: String,
+        acct: String,
+        remote: bool,
+        boosted_post_id: Option<String>,
+        display_name: String,
+        username: String,
+        icon_url: String,
+        user_url: String,
+        inbox: String,
+        outbox: String
+    }
+
+    fn make_into_db(p: Post, attachments: Vec<db::Attachment>) -> db::Post {
+        db::Post {
+            id: ObjectUuid(p.post_id),
+            uri: ObjectUri(p.post_uri),
+            user: db::User {
+                id: ObjectUuid(p.user_id),
+                actor: db::Actor {
+                    id: ObjectUri(p.actor_id),
+                    inbox: p.inbox,
+                    outbox: p.outbox
+                },
+                username: p.username,
+                display_name: p.display_name,
+                acct: p.acct,
+                remote: p.remote,
+                url: p.user_url,
+                created_at: parse_ts(p.user_created).unwrap(),
+                icon_url: p.icon_url,
+                posts: db::UserPosts {
+                    last_post_at: None
+                }
+            },
+            content: p.content,
+            created_at: parse_ts(p.post_created).unwrap(),
+            boosted_post: None,
+            attachments
+        }
+    }
+
+    // FIXME: query! can't cope with this. returns a type error
+    let posts = sqlx::query_as::<_, Post>(
+        r#"   
+            WITH RECURSIVE get_home_timeline_with_boosts(
+              id, boosted_post_id, is_boost_source
+            ) AS
+            (
+              SELECT p.id, p.boosted_post_id, 0 as is_boost_source
+              FROM post p
+              WHERE p.user_id IN (
+                SELECT u.id
+                FROM follow f 
+                INNER JOIN user u ON u.actor_id = f.followed_id 
+                WHERE f.follower_id = $1
+              )
+            UNION
+              SELECT p.id, p.boosted_post_id, 1 as is_boost_source
+              FROM post p
+              JOIN get_home_timeline_with_boosts tl ON tl.boosted_post_id = p.id
+           )
+           SELECT is_boost_source, p.id as "post_id", u.id as "user_id",
+                  p.content, p.uri as "post_uri", u.username, u.display_name,
+                  u.actor_id, p.created_at as "post_created", p.boosted_post_id, u.icon_url, u.url as "user_url",
+                  a.inbox, a.outbox, u.acct, u.remote, u.created_at as "user_created"
+           FROM get_home_timeline_with_boosts
+           JOIN post p ON p.id = get_home_timeline_with_boosts.id
+           JOIN actor a ON u.actor_id = a.id
+           JOIN user u ON u.id = p.user_id;
+        "#,
+    )
+        .bind(actor.0)
+        .fetch_all(&mut *conn)
+        .await
+        .unwrap();
+
+    let mut out = vec![];
+    for post in posts.iter() {
+        let boost_id = post.boosted_post_id.clone();
+        let is_boost_base = post.is_boost_source;
+        let attachments = attachments_for_post(ObjectUuid(post.post_id.clone()), &mut *conn)
+            .await
+            .unwrap();
+        
+        let mut base = make_into_db(post.clone(), attachments);
+        if let Some(boost_id) = boost_id {
+
+            let attachments = attachments_for_post(ObjectUuid(boost_id.clone()), &mut *conn)
+                .await
+                .unwrap();
+            
+            let boost = posts.iter().find(|p| p.post_id == boost_id).unwrap();
+            let boost = make_into_db(boost.clone(), attachments);
+            base.boosted_post = Some(Box::new(boost));
+        }
+
+        if !is_boost_base {
+            out.push(base);
+        }
     }
 
     Ok(out)

@@ -87,9 +87,9 @@ impl<'a> HttpWrapper<'a> {
         let http_result = self
             .client
             .post(inbox)
-            .sign(self.key_id)
-            .json(activity)
             .activity()
+            .json(activity)
+            .sign(self.key_id)
             .send()
             .await;
         

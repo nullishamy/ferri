@@ -7,31 +7,39 @@ use rocket::{
 use rocket_db_pools::Connection;
 use serde::{Deserialize, Serialize};
 
-use main::types::{Object, ObjectUri, ObjectUuid, ap, as_context, get};
+use main::types::{ap, as_context, get, Object, ObjectContext, ObjectUri, ObjectUuid};
 
 use super::activity_type;
 use crate::Db;
 
 #[derive(Serialize, Deserialize)]
 pub struct OrderedCollection {
+    #[serde(rename = "@context")]
+    context: ObjectContext,
+    #[serde(rename = "type")]
     ty: String,
+    id: String,
     total_items: i64,
     ordered_items: Vec<String>,
 }
 
-#[get("/users/<_user>/inbox")]
-pub async fn inbox(_user: String) -> Json<OrderedCollection> {
+#[get("/users/<user>/inbox")]
+pub async fn inbox(user: String) -> Json<OrderedCollection> {
     Json(OrderedCollection {
+        context: as_context(),
         ty: "OrderedCollection".to_string(),
+        id: format!("https://ferri.amy.mov/users/{}/inbox", user),
         total_items: 0,
         ordered_items: vec![],
     })
 }
 
-#[get("/users/<_user>/outbox")]
-pub async fn outbox(_user: String) -> Json<OrderedCollection> {
+#[get("/users/<user>/outbox")]
+pub async fn outbox(user: String) -> Json<OrderedCollection> {
     Json(OrderedCollection {
+        context: as_context(),
         ty: "OrderedCollection".to_string(),
+        id: format!("https://ferri.amy.mov/users/{}/outbox", user),
         total_items: 0,
         ordered_items: vec![],
     })
@@ -41,7 +49,7 @@ pub async fn outbox(_user: String) -> Json<OrderedCollection> {
 pub async fn followers(
     mut db: Connection<Db>,
     uuid: &str,
-) -> Result<Json<OrderedCollection>, NotFound<String>> {
+) -> Result<ActivityResponse<Json<OrderedCollection>>, NotFound<String>> {
     let target = main::ap::User::from_id(uuid, &mut **db)
         .await
         .map_err(|e| NotFound(e.to_string()))?;
@@ -59,9 +67,11 @@ pub async fn followers(
     .await
     .unwrap();
 
-    Ok(Json(OrderedCollection {
+    ap_ok(Json(OrderedCollection {
+        context: as_context(),
         ty: "OrderedCollection".to_string(),
         total_items: 1,
+        id: format!("https://ferri.amy.mov/users/{}/followers", uuid),
         ordered_items: followers
             .into_iter()
             .map(|f| f.follower_id)
@@ -73,7 +83,7 @@ pub async fn followers(
 pub async fn following(
     mut db: Connection<Db>,
     uuid: &str,
-) -> Result<Json<OrderedCollection>, NotFound<String>> {
+) -> Result<ActivityResponse<Json<OrderedCollection>>, NotFound<String>> {
     let target = main::ap::User::from_id(uuid, &mut **db)
         .await
         .map_err(|e| NotFound(e.to_string()))?;
@@ -91,9 +101,11 @@ pub async fn following(
     .await
     .unwrap();
 
-    Ok(Json(OrderedCollection {
+    ap_ok(Json(OrderedCollection {
+        context: as_context(),
         ty: "OrderedCollection".to_string(),
         total_items: 1,
+        id: format!("https://ferri.amy.mov/users/{}/following", uuid),
         ordered_items: following
             .into_iter()
             .map(|f| f.followed_id)

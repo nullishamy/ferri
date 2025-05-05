@@ -40,6 +40,14 @@ pub async fn handle_inbox_request(
             
             let follower = http.get_person(&activity.actor).await.unwrap();
 
+            let actor = db::Actor {
+                id: follower.obj.id.clone(),
+                inbox: follower.inbox.clone(),
+                outbox: follower.outbox.clone()
+            };
+
+            make::new_actor(actor, &mut conn).await.unwrap();
+
             let follow = db::Follow {
                 id: ObjectUri(
                     format!("https://ferri.amy.mov/activities/{}", crate::new_id())
@@ -117,16 +125,29 @@ pub async fn handle_inbox_request(
                 .await
                 .unwrap();
 
+            let attachments = post.attachment
+                .into_iter()
+                .map(|at| {
+                    db::Attachment {
+                        id: ObjectUuid(crate::new_id()),
+                        post_id: ObjectUuid(post_id.clone()),
+                        url: at.url,
+                        media_type: Some(at.media_type),
+                        sensitive: at.sensitive,
+                        alt: at.summary
+                    }
+                })
+                .collect::<Vec<_>>();
+
             let post = db::Post {
                 id: ObjectUuid(post_id),
                 uri: post.obj.id,
                 user,
                 content: post.content,
                 created_at,
-                attachments: vec![],
+                attachments,
                 boosted_post: None
             };
-
             
             make::new_post(post, &mut conn)
                 .await
@@ -288,8 +309,7 @@ pub async fn handle_inbox_request(
                     attachments: vec![],
                     content: String::new(),
                     created_at,
-                    boosted_post: Some(boosted_post.id.clone())
-
+                    boosted_post: Some(Box::new(boosted_post.clone()))
                 }
             };
 

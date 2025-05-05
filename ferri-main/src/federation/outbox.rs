@@ -1,13 +1,14 @@
 use serde::{Deserialize, Serialize};
 use tracing::info;
 use std::fmt::Debug;
-use crate::{ap::http::HttpClient, federation::http::HttpWrapper, types::{ap, ObjectContext}};
+use crate::{ap::http::HttpClient, federation::http::HttpWrapper, types::{ap::{self, ActivityType}, as_context, db, Object, ObjectContext, ObjectUri}};
 
 #[derive(Debug)]
 pub enum OutboxRequest {
     // FIXME: Make the String (key_id) nicer
     //        Probably store it in the DB and pass a db::User here
-    Accept(ap::AcceptActivity, String, ap::Person)
+    Accept(ap::AcceptActivity, String, ap::Person),
+    Status(db::Post, String)
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -49,5 +50,45 @@ pub async fn handle_outbox_request(
             
             info!("accept res {}", res);
         },
+        OutboxRequest::Status(post, key_id) => {
+            // FIXME: Take a list of who we should send to
+            //        for now we only propogate to my main instance
+
+            let http = HttpWrapper::new(http, &key_id);
+            
+            let activity = PreparedActivity {
+                context: as_context(),
+                id: format!("https://ferri.amy.mov/activities/{}", crate::new_id()),
+                ty: ActivityType::Create,
+                actor: post.user.actor.id.0.clone(),
+                object: ap::Post {
+                    obj: Object {
+                        id: ObjectUri(
+                            format!(
+                                "https://ferri.amy.mov/users/{}/posts/{}",
+                                post.user.id.0,
+                                post.id.0
+                            )
+                        ),
+                        context: as_context()
+                    },
+                    ty: ActivityType::Note,
+                    ts: post.created_at.to_rfc3339(),
+                    content: post.content,
+                    to: vec![format!("https://ferri.amy.mov/users/{}/followers", post.user.id.0)],
+                    cc: vec!["https://www.w3.org/ns/activitystreams#Public".to_string()],
+                    attachment: vec![],
+                    attributed_to: Some(post.user.actor.id.0)
+                },
+                published: crate::ap::new_ts()
+            };
+
+            let res = http
+                .post_activity("https://fedi.amy.mov/users/9zkygethkdw60001/inbox", activity)
+                .await
+                .unwrap();
+            
+            info!("status res {}", res);
+        }
     }
 }

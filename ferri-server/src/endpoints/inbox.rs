@@ -5,10 +5,10 @@ use main::{
     },
     types::{ap, get, ObjectUuid}
 };
-use rocket::{State, post, serde::json::serde_json};
+use rocket::{post, response::Redirect, serde::json::serde_json, State};
 use rocket_db_pools::Connection;
 use serde::de::DeserializeOwned;
-use tracing::{debug, event, span, warn, Instrument, Level};
+use tracing::{debug, event, info, span, warn, Instrument, Level};
 
 use crate::{Db, InboundQueue, OutboundQueue};
 
@@ -23,7 +23,13 @@ pub async fn inbox(
     outbound: &State<OutboundQueue>,
     user_uuid: &str,
     body: String
-) {
+) -> Result<(), Redirect> {
+    if user_uuid == "amy" {
+        return Err(Redirect::permanent(
+            "https://ferri.amy.mov/users/9b9d497b-2731-435f-a929-e609ca69dac9/inbox",
+        ));
+    }
+    
     let user = get::user_by_id(
         ObjectUuid(user_uuid.to_string()),
         &mut db
@@ -65,6 +71,7 @@ pub async fn inbox(
                 queue.0.send(msg).await;
             }
             ap::ActivityType::Create => {
+                info!("{}", body);
                 let activity = deser::<ap::CreateActivity>(&body);
                 let msg = QueueMessage::Inbound(
                     InboxRequest::Create(activity, user, conn)
@@ -94,5 +101,7 @@ pub async fn inbox(
         }
     }
     .instrument(span)
-    .await;
+        .await;
+
+    Ok(())
 }

@@ -5,7 +5,7 @@ use endpoints::{
 
 use tracing_subscriber::fmt;
 
-use main::{federation, types::{ObjectUri, ObjectUuid}};
+use main::{federation, types::{db, get, ObjectUri, ObjectUuid}};
 
 use main::ap::http;
 use main::config::Config;
@@ -35,10 +35,12 @@ async fn activity_endpoint(_activity: String) {}
 
 #[derive(Debug)]
 pub struct AuthenticatedUser {
-    pub username: String,
     pub id: ObjectUuid,
-    pub token: String,
     pub actor_id: ObjectUri,
+    pub user: db::User,
+    pub username: String,
+    pub token: String,
+    
 }
 
 #[derive(Debug)]
@@ -70,12 +72,18 @@ impl<'a> FromRequest<'a> for AuthenticatedUser {
             .await;
 
             if let Ok(auth) = auth {
-                return Outcome::Success(AuthenticatedUser {
-                    token: auth.token,
-                    id: ObjectUuid(auth.id),
-                    username: auth.display_name,
-                    actor_id: ObjectUri(auth.actor_id),
-                });
+                let uid = ObjectUuid(auth.id);
+                let user = get::user_by_id(uid.clone(), &mut **conn).await;
+
+                if let Ok(user) = user {
+                    return Outcome::Success(AuthenticatedUser {
+                        id: uid,
+                        actor_id: ObjectUri(auth.actor_id),
+                        user,
+                        token: auth.token,
+                        username: auth.display_name,
+                    });   
+                }
             }
         }
 
