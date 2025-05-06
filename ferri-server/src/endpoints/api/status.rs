@@ -43,7 +43,7 @@ fn to_db_post(req: &CreateStatus, user: &AuthenticatedUser, config: &Config) -> 
         uri: ObjectUri(config.post_url(&user.id.0, &post_id)),
         user: user.user.clone(),
         content: req.status.clone(),
-        created_at: main::ap::now(),
+        created_at: main::now(),
         boosted_post: None,
         attachments: vec![]
     }

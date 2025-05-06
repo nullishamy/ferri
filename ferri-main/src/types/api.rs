@@ -71,6 +71,24 @@ pub struct Status {
 }
 
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
+pub struct Relationship {
+    id: ObjectUuid,
+    following: bool,
+    showing_reblogs: bool,
+    notifying: bool,
+    followed_by: bool,
+    blocking: bool,
+    blocked_by: bool,
+    muting: bool,
+    muting_notifications: bool,
+    requested: bool,
+    requested_by: bool,
+    domain_blocking: bool,
+    endorsed: bool,
+    note: String
+}
+
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
 pub struct Account {
     pub id: ObjectUuid,
     pub username: String,

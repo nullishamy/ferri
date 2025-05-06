@@ -34,6 +34,7 @@ pub struct User {
     pub icon_url: String,
 
     pub posts: UserPosts,
+    pub key_id: String
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]

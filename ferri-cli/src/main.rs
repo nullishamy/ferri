@@ -57,11 +57,13 @@ async fn main() {
             acct: s("amy"),
             remote: false,
             url: s("https://ferri.amy.mov/@amy"),
-            created_at: main::ap::now(),
+            created_at: main::now(),
             icon_url: s("https://ferri.amy.mov/assets/pfp.png"),
             posts: db::UserPosts {
                 last_post_at: None
-            }
+            },
+            key_id: s("https://ferri.amy.mov/users/9b9d497b-2731-435f-a929-e609ca69dac9#main-key")
+
         };
 
         make::new_user(user, &mut *conn).await.unwrap();

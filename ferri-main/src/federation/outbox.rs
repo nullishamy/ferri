@@ -1,14 +1,22 @@
 use serde::{Deserialize, Serialize};
+use sqlx::SqliteConnection;
 use tracing::info;
 use std::fmt::Debug;
-use crate::{ap::http::HttpClient, federation::http::HttpWrapper, types::{ap::{self, ActivityType}, as_context, db, Object, ObjectContext, ObjectUri}};
+use crate::{federation::http::HttpWrapper, types::{ap::{self, ActivityType}, as_context, db, make, Object, ObjectContext, ObjectUri}};
+
+use super::http::HttpClient;
 
 #[derive(Debug)]
 pub enum OutboxRequest {
     // FIXME: Make the String (key_id) nicer
     //        Probably store it in the DB and pass a db::User here
     Accept(ap::AcceptActivity, String, ap::Person),
-    Status(db::Post, String)
+    Status(db::Post, String),
+    Follow {
+        follower: db::User,
+        followed: db::User,
+        conn: SqliteConnection
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -40,7 +48,7 @@ pub async fn handle_outbox_request(
                 ty: activity.ty,
                 actor: activity.actor,
                 object: activity.object,
-                published: crate::ap::new_ts()
+                published: crate::now_str(),
             };
 
             let res = http
@@ -80,7 +88,7 @@ pub async fn handle_outbox_request(
                     attachment: vec![],
                     attributed_to: Some(post.user.actor.id.0)
                 },
-                published: crate::ap::new_ts()
+                published: crate::now_str(),
             };
 
             let res = http
@@ -90,5 +98,40 @@ pub async fn handle_outbox_request(
             
             info!("status res {}", res);
         }
+        OutboxRequest::Follow { follower, followed, mut conn } => {
+            let follow = db::Follow {
+                id: ObjectUri(format!(
+                    "https://ferri.amy.mov/activities/{}",
+                    crate::new_id())
+                ),
+                follower: follower.actor.id.clone(),
+                followed: followed.actor.id.clone(),
+            };
+
+            make::new_follow(follow, &mut conn)
+                .await
+                .unwrap();
+
+            let http = HttpWrapper::new(http, &follower.key_id);
+            
+            let activity = PreparedActivity {
+                context: as_context(),
+                id: format!(
+                    "https://ferri.amy.mov/activities/{}",
+                    crate::new_id()
+                ),
+                ty: ActivityType::Follow,
+                actor: follower.actor.id.0,
+                object: followed.actor.id.0,
+                published: crate::now_str(),
+            };
+
+            let res = http
+                .post_activity(&followed.actor.inbox, activity)
+                .await
+                .unwrap();
+            
+            info!("follow res {}", res);
+        },
     }
 }

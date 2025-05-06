@@ -1,12 +1,12 @@
 use rocket::{
     get, serde::json::Json, FromFormField, State,
 };
-use main::types::{api, get};
+use main::{federation::http::HttpWrapper, types::{api, get}};
 use rocket_db_pools::Connection;
 use serde::{Deserialize, Serialize};
 use tracing::{info, error};
 
-use crate::{http_wrapper::HttpWrapper, AuthenticatedUser, Db};
+use crate::{AuthenticatedUser, Db};
 
 #[derive(Serialize, Deserialize, FromFormField, Debug)]
 #[serde(rename_all = "lowercase")]

@@ -1,7 +1,6 @@
 use crate::Db;
-use main::ap;
-use main::types::api;
-use rocket::{State, get, serde::json::Json};
+use main::types::{api, get};
+use rocket::{get, serde::json::Json, State};
 use rocket_db_pools::Connection;
 use tracing::info;
 
@@ -27,24 +26,26 @@ pub async fn webfinger(
 
     let acct = resource.strip_prefix("acct:").unwrap();
     let (user, _) = acct.split_once("@").unwrap();
-    let user = ap::User::from_username(user, &mut **db).await;
+    let user = get::user_by_username(user, &mut **db)
+        .await
+        .unwrap();
 
     Json(api::WebfingerHit {
         subject: resource.to_string(),
         aliases: vec![
-            config.user_url(user.id()),
-            config.user_web_url(user.username()),
+            config.user_url(&user.id.0),
+            config.user_web_url(&user.username),
         ],
         links: vec![
             api::WebfingerLink {
                 rel: "http://webfinger.net/rel/profile-page".to_string(),
                 ty: Some("text/html".to_string()),
-                href: Some(config.user_web_url(user.username())),
+                href: Some(config.user_web_url(&user.username)),
             },
             api::WebfingerLink {
                 rel: "self".to_string(),
                 ty: Some("application/activity+json".to_string()),
-                href: Some(config.user_url(user.id())),
+                href: Some(config.user_url(&user.id.0)),
             },
         ],
     })

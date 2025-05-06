@@ -1,8 +1,8 @@
 use tokio::sync::mpsc;
 use tracing::{info, span, Instrument, Level};
 
-use crate::ap::http::HttpClient;
 use crate::config::Config;
+use crate::federation::http::HttpClient;
 use crate::federation::inbox::handle_inbox_request;
 use crate::federation::outbox::handle_outbox_request;
 

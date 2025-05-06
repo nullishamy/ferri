@@ -1,4 +1,5 @@
-use main::ap;
+use main::federation::outbox::OutboxRequest;
+use main::federation::QueueMessage;
 use main::types::{api, get, ObjectUuid};
 use rocket::response::status::NotFound;
 use rocket::{
@@ -6,10 +7,9 @@ use rocket::{
     serde::{Deserialize, Serialize, json::Json},
 };
 use rocket_db_pools::Connection;
-use uuid::Uuid;
 use tracing::info;
 
-use crate::{AuthenticatedUser, Db};
+use crate::{AuthenticatedUser, Db, OutboundQueue};
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(crate = "rocket::serde")]
@@ -62,37 +62,36 @@ pub async fn verify_credentials(user: AuthenticatedUser) -> Json<CredentialAcoun
 #[post("/accounts/<uuid>/follow")]
 pub async fn new_follow(
     mut db: Connection<Db>,
-    helpers: &State<crate::Helpers>,
+    outbound: &State<OutboundQueue>,
     uuid: &str,
     user: AuthenticatedUser,
 ) -> Result<(), NotFound<String>> {
-    let http = &helpers.http;
-
-    let follower = ap::User::from_actor_id(&user.actor_id.0, &mut **db).await;
-
-    let followed = ap::User::from_id(uuid, &mut **db)
+    let follower = user.user;
+    let followed = get::user_by_id(ObjectUuid(uuid.to_string()), &mut **db)
         .await
-        .map_err(|e| NotFound(e.to_string()))?;
+        .unwrap();
 
-    let outbox = ap::Outbox::for_user(follower.clone(), http);
+    let conn = db.into_inner();
+    let conn = conn.detach();
 
-    let activity = ap::Activity {
-        id: format!("https://ferri.amy.mov/activities/{}", Uuid::new_v4()),
-        ty: ap::ActivityType::Follow,
-        object: followed.actor_id().to_string(),
-        ..Default::default()
-    };
-
-    let req = ap::OutgoingActivity {
-        signed_by: format!("{}#main-key", follower.uri()),
-        req: activity,
-        to: followed.actor().clone(),
-    };
-
-    req.save(&mut **db).await;
-    outbox.post(req).await;
-
+    let msg = QueueMessage::Outbound(OutboxRequest::Follow {
+        follower,
+        followed,
+        conn
+    });
+    
+    outbound.0.send(msg).await;
+    
     Ok(())
+}
+
+#[get("/accounts/relationships?<id>")]
+pub async fn relationships(
+    id: Vec<String>,
+    user: AuthenticatedUser
+) -> Result<Json<Vec<api::Relationship>>, ()> {
+    info!("{} looking up relationships for {:#?}", user.username, id);
+    Ok(Json(vec![]))
 }
 
 #[get("/accounts/<uuid>")]

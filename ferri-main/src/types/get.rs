@@ -25,7 +25,10 @@ fn parse_ts(ts: String) -> Option<DateTime<Utc>> {
     Some(dt.unwrap())
 }
 
-pub async fn user_by_id(id: ObjectUuid, conn: &mut SqliteConnection) -> Result<db::User, DbError> {
+pub async fn user_by_id(
+    id: ObjectUuid,
+    conn: &mut SqliteConnection
+) -> Result<db::User, DbError> {
     info!("fetching user by uuid '{:?}' from the database", id);
 
     let record = sqlx::query!(
@@ -89,7 +92,7 @@ pub async fn user_by_id(id: ObjectUuid, conn: &mut SqliteConnection) -> Result<d
     info!("user {:?} last posted {:?}", id, last_post_at);
 
     Ok(db::User {
-        id: ObjectUuid(record.user_id),
+        id: ObjectUuid(record.user_id.clone()),
         actor: db::Actor {
             id: ObjectUri(record.actor_id),
             inbox: record.inbox,
@@ -102,7 +105,99 @@ pub async fn user_by_id(id: ObjectUuid, conn: &mut SqliteConnection) -> Result<d
         created_at: user_created,
         url: record.url,
         posts: db::UserPosts { last_post_at },
-        icon_url: record.icon_url
+        icon_url: record.icon_url,
+        key_id: format!(
+            "https://ferri.amy.mov/users/{}#main-key",
+            record.user_id
+        )
+    })
+}
+
+pub async fn user_by_username(
+    username: &str,
+    conn: &mut SqliteConnection
+) -> Result<db::User, DbError> {
+    info!("fetching user by username '{}' from the database", username);
+
+    let record = sqlx::query!(
+        r#"
+      SELECT
+        u.id as "user_id",
+        u.username,
+        u.actor_id,
+        u.display_name,
+        a.inbox,
+        a.outbox,
+        u.url,
+        u.acct,
+        u.remote,
+        u.created_at,
+        u.icon_url
+      FROM "user" u 
+      INNER JOIN "actor" a ON u.actor_id = a.id
+      WHERE u.username = ?1
+    "#,
+        username
+    )
+    .fetch_one(&mut *conn)
+    .await
+    .map_err(|e| DbError::FetchError(e.to_string()))?;
+
+    let follower_count = sqlx::query_scalar!(
+        r#"
+      SELECT COUNT(follower_id)
+      FROM "follow"
+      WHERE followed_id = ?1
+    "#,
+        record.actor_id
+    )
+    .fetch_one(&mut *conn)
+    .await
+    .map_err(|e| DbError::FetchError(e.to_string()))?;
+
+    let last_post_at = sqlx::query_scalar!(
+        r#"
+      SELECT datetime(p.created_at)
+      FROM post p 
+      WHERE p.user_id = ?1
+      ORDER BY datetime(p.created_at) DESC 
+      LIMIT 1
+    "#,
+        record.user_id
+    )
+    .fetch_optional(&mut *conn)
+    .await
+    .map_err(|e| DbError::FetchError(e.to_string()))?
+    .flatten()
+    .and_then(|ts| {
+        info!("parsing timestamp {}", ts);
+        parse_ts(ts)
+    });
+
+    let user_created = parse_ts(record.created_at).expect("no db corruption");
+
+    info!("user {} has {} followers", record.user_id, follower_count);
+    info!("user {} last posted {:?}", record.user_id, last_post_at);
+
+    Ok(db::User {
+        id: ObjectUuid(record.user_id.clone()),
+        actor: db::Actor {
+            id: ObjectUri(record.actor_id),
+            inbox: record.inbox,
+            outbox: record.outbox,
+        },
+        acct: record.acct,
+        remote: record.remote,
+        username: record.username,
+        display_name: record.display_name,
+        created_at: user_created,
+        url: record.url,
+        posts: db::UserPosts { last_post_at },
+        icon_url: record.icon_url,
+        key_id: format!(
+            "https://ferri.amy.mov/users/{}#main-key",
+            record.user_id
+        )
     })
 }
 
@@ -170,7 +265,7 @@ pub async fn user_by_actor_uri(uri: ObjectUri, conn: &mut SqliteConnection) -> R
     info!("user {:?} last posted {:?}", record.user_id, last_post_at);
 
     Ok(db::User {
-        id: ObjectUuid(record.user_id),
+        id: ObjectUuid(record.user_id.clone()),
         actor: db::Actor {
             id: ObjectUri(record.actor_id),
             inbox: record.inbox,
@@ -183,7 +278,11 @@ pub async fn user_by_actor_uri(uri: ObjectUri, conn: &mut SqliteConnection) -> R
         created_at: user_created,
         url: record.url,
         posts: db::UserPosts { last_post_at },
-        icon_url: record.icon_url
+        icon_url: record.icon_url,
+        key_id: format!(
+            "https://ferri.amy.mov/users/{}#main-key",
+            record.user_id
+        )
     })
 }
 
@@ -248,7 +347,7 @@ pub async fn posts_for_user_id(
             id: ObjectUuid(record.post_id),
             uri: ObjectUri(record.post_uri),
             user: db::User {
-                id: ObjectUuid(record.user_id),
+                id: ObjectUuid(record.user_id.clone()),
                 actor: db::Actor {
                     id: ObjectUri(record.actor_id),
                     inbox: record.inbox,
@@ -263,7 +362,11 @@ pub async fn posts_for_user_id(
                 icon_url: record.icon_url,
                 posts: db::UserPosts {
                     last_post_at: None
-                }
+                },
+                key_id: format!(
+                    "https://ferri.amy.mov/users/{}#main-key",
+                    record.user_id
+                )
             },
             attachments,
             content: record.content,
@@ -305,7 +408,7 @@ pub async fn home_timeline(
             id: ObjectUuid(p.post_id),
             uri: ObjectUri(p.post_uri),
             user: db::User {
-                id: ObjectUuid(p.user_id),
+                id: ObjectUuid(p.user_id.clone()),
                 actor: db::Actor {
                     id: ObjectUri(p.actor_id),
                     inbox: p.inbox,
@@ -320,7 +423,11 @@ pub async fn home_timeline(
                 icon_url: p.icon_url,
                 posts: db::UserPosts {
                     last_post_at: None
-                }
+                },
+                key_id: format!(
+                    "https://ferri.amy.mov/users/{}#main-key",
+                    p.user_id
+                )
             },
             content: p.content,
             created_at: parse_ts(p.post_created).unwrap(),
@@ -390,4 +497,54 @@ pub async fn home_timeline(
     }
 
     Ok(out)
+}
+
+pub async fn followers_for_user(
+    user_id: ObjectUuid,
+    conn: &mut SqliteConnection
+) -> Result<Vec<db::Follow>, DbError> {
+    let followers = sqlx::query!(
+        "SELECT * FROM follow WHERE followed_id = ?",
+        user_id.0
+    )
+        .fetch_all(&mut *conn)
+        .await
+        .unwrap();
+
+    let followers = followers.into_iter()
+        .map(|f| {
+            db::Follow {
+                id: ObjectUri(f.id),
+                follower: ObjectUri(f.follower_id),
+                followed: ObjectUri(f.followed_id)
+            }
+        })
+        .collect::<Vec<_>>();
+    
+    Ok(followers)   
+}
+
+pub async fn following_for_user(
+    user_id: ObjectUuid,
+    conn: &mut SqliteConnection
+) -> Result<Vec<db::Follow>, DbError> {
+    let followers = sqlx::query!(
+        "SELECT * FROM follow WHERE follower_id = ?",
+        user_id.0
+    )
+        .fetch_all(&mut *conn)
+        .await
+        .unwrap();
+
+    let followers = followers.into_iter()
+        .map(|f| {
+            db::Follow {
+                id: ObjectUri(f.id),
+                follower: ObjectUri(f.follower_id),
+                followed: ObjectUri(f.followed_id)
+            }
+        })
+        .collect::<Vec<_>>();
+    
+    Ok(followers)   
 }

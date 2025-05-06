@@ -1,7 +1,6 @@
 use crate::types::{ap, as_context, db, get, make, Object, ObjectUri, ObjectUuid};
-use crate::ap::http::HttpClient;
 
-use super::http::HttpWrapper;
+use super::http::{HttpClient, HttpWrapper};
 use super::outbox::OutboxRequest;
 use super::QueueMessage;
 
@@ -83,7 +82,7 @@ pub async fn handle_inbox_request(
             let rmt = person.remote_info();
             
             let post = activity.object;
-            let post_id = crate::ap::new_id();
+            let post_id = crate::new_id();
 
             let created_at = DateTime::parse_from_rfc3339(&activity.ts)
                 .map(|dt| dt.to_utc())
@@ -104,20 +103,25 @@ pub async fn handle_inbox_request(
             let user = get::user_by_actor_uri(actor.id.clone(), &mut conn)
                 .await
                 .unwrap_or_else(|_| {
+                    let id = crate::new_id();
                     db::User {
-                        id: ObjectUuid(crate::new_id()),
+                        id: ObjectUuid(id.clone()),
                         actor,
                         username: person.preferred_username,
                         display_name: person.name,
                         acct: rmt.acct,
                         remote: rmt.is_remote,
                         url: rmt.web_url,
-                        created_at: crate::ap::now(),
+                        created_at: crate::now(),
                         icon_url: person.icon.map(|ic| ic.url)
                             .unwrap_or("https//ferri.amy.mov/assets/pfp.png".to_string()),
                         posts: db::UserPosts {
                             last_post_at: None
-                        }
+                        },
+                        key_id: format!(
+                            "https://ferri.amy.mov/users/{}#main-key",
+                            id
+                        )
                     }
                 });
 
@@ -199,8 +203,9 @@ pub async fn handle_inbox_request(
                 let user = get::user_by_actor_uri(actor.id.clone(), &mut conn)
                     .await
                     .unwrap_or_else(|_| {
+                        let id = crate::new_id();
                         db::User {
-                            id: ObjectUuid(crate::new_id()),
+                            id: ObjectUuid(id.clone()),
                             actor,
                             username: boosted_author.preferred_username,
                             display_name: boosted_author.name,
@@ -208,12 +213,16 @@ pub async fn handle_inbox_request(
                             remote: boosted_rmt.is_remote,
                             url: boosted_rmt.web_url,
                             // FIXME: Come from boosted_author
-                            created_at: crate::ap::now(),
+                            created_at: crate::now(),
                             icon_url: boosted_author.icon.map(|ic| ic.url)
                                 .unwrap_or("https//ferri.amy.mov/assets/pfp.png".to_string()),
                             posts: db::UserPosts {
                                 last_post_at: None
-                            }
+                            },
+                            key_id: format!(
+                                "https://ferri.amy.mov/users/{}#main-key",
+                                id
+                            )
                         }
                     });
 
@@ -270,20 +279,25 @@ pub async fn handle_inbox_request(
                 let user = get::user_by_actor_uri(actor.id.clone(), &mut conn)
                     .await
                     .unwrap_or_else(|_| {
+                        let id = crate::new_id();
                         db::User {
-                            id: ObjectUuid(crate::new_id()),
+                            id: ObjectUuid(id.clone()),
                             actor,
                             username: person.preferred_username,
                             display_name: person.name,
                             acct: rmt.acct,
                             remote: rmt.is_remote,
                             url: rmt.web_url,
-                            created_at: crate::ap::now(),
+                            created_at: crate::now(),
                             icon_url: person.icon.map(|ic| ic.url)
                                 .unwrap_or("https//ferri.amy.mov/assets/pfp.png".to_string()),
                             posts: db::UserPosts {
                                 last_post_at: None
-                            }
+                            },
+                            key_id: format!(
+                                "https://ferri.amy.mov/users/{}#main-key",
+                                id
+                            )
                         }
                     });
 

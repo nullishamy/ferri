@@ -4,10 +4,8 @@ use endpoints::{
 };
 
 use tracing_subscriber::fmt;
+use main::{federation::{self, http}, types::{db, get, ObjectUri, ObjectUuid}};
 
-use main::{federation, types::{db, get, ObjectUri, ObjectUuid}};
-
-use main::ap::http;
 use main::config::Config;
 use rocket::{
     Build, Request, Rocket, build, get,
@@ -170,6 +168,7 @@ pub fn launch(cfg: Config) -> Rocket<Build> {
                 api::user::new_follow,
                 api::user::statuses,
                 api::user::account,
+                api::user::relationships,
                 api::apps::new_app,
                 api::preferences::preferences,
                 api::user::verify_credentials,
