@@ -134,7 +134,6 @@ pub fn launch(cfg: Config) -> Rocket<Build> {
             "/admin",
             routes![
                 admin::index,
-                admin::button_clicked
             ]   
         )
         .mount(

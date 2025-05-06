@@ -1,3 +1,4 @@
+use main::types::{db, make, ObjectUri, ObjectUuid};
 use server::launch;
 extern crate rocket;
 
@@ -24,6 +25,10 @@ pub fn read_config(path: impl AsRef<Path>) -> config::Config {
     toml::from_str(&content).unwrap()
 }
 
+fn s(st: &'static str) -> String {
+    st.to_string()
+}
+
 #[rocket::main]
 async fn main() {
     let cli = Cli::parse();
@@ -36,42 +41,30 @@ async fn main() {
             .unwrap();
         let mut conn = pool.acquire().await.unwrap();
 
-        sqlx::query!(
-            r#"
-          INSERT INTO actor (id, inbox, outbox)
-          VALUES (?1, ?2, ?3)
-        "#,
-            "https://ferri.amy.mov/users/9b9d497b-2731-435f-a929-e609ca69dac9",
-            "https://ferri.amy.mov/users/9b9d497b-2731-435f-a929-e609ca69dac9/inbox",
-            "https://ferri.amy.mov/users/9b9d497b-2731-435f-a929-e609ca69dac9/outbox"
-        )
-        .execute(&mut *conn)
-        .await
-        .unwrap();
+        let actor = db::Actor {
+            id: ObjectUri(s("https://ferri.amy.mov/users/9b9d497b-2731-435f-a929-e609ca69dac9")),
+            inbox: s("https://ferri.amy.mov/users/9b9d497b-2731-435f-a929-e609ca69dac9/inbox"),
+            outbox: s("https://ferri.amy.mov/users/9b9d497b-2731-435f-a929-e609ca69dac9/outbox")
+        };
 
-        let ts = main::ap::new_ts();
+        make::new_actor(actor.clone(), &mut *conn).await.unwrap();
 
-        sqlx::query!(
-            r#"
-          INSERT INTO user (
-            id, acct, url, remote, username,
-            actor_id, display_name, created_at, icon_url
-          )
-          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
-        "#,
-            "9b9d497b-2731-435f-a929-e609ca69dac9",
-            "amy",
-            "https://ferri.amy.mov/@amy",
-            false,
-            "amy",
-            "https://ferri.amy.mov/users/9b9d497b-2731-435f-a929-e609ca69dac9",
-            "amy",
-            ts,
-            "https://ferri.amy.mov/assets/pfp.png"
-        )
-        .execute(&mut *conn)
-        .await
-        .unwrap();
+        let user = db::User {
+            id: ObjectUuid(s("9b9d497b-2731-435f-a929-e609ca69dac9")),
+            actor,
+            username: s("amy"),
+            display_name: s("amy (display)"),
+            acct: s("amy"),
+            remote: false,
+            url: s("https://ferri.amy.mov/@amy"),
+            created_at: main::ap::now(),
+            icon_url: s("https://ferri.amy.mov/assets/pfp.png"),
+            posts: db::UserPosts {
+                last_post_at: None
+            }
+        };
+
+        make::new_user(user, &mut *conn).await.unwrap();
     } else {
         let _ = launch(config).launch().await;
     }

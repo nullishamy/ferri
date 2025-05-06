@@ -22,10 +22,6 @@ impl<'a> HttpWrapper<'a> {
         Self { client, key_id }
     }
 
-    pub fn client(&self) -> &'a HttpClient {
-        self.client
-    }
-
     async fn get<T: serde::de::DeserializeOwned + Debug>(
         &self,
         ty: &str,
